@@ -157,8 +157,7 @@ class LookupModule(LookupBase):
                 if results[1]:
                     # responds with a single or list of result maps
                     if isinstance(results[1], list):
-                        for r in results[1]:
-                            values.append(to_text(r['Value']))
+                        values.extend(to_text(r['Value']) for r in results[1])
                     else:
                         values.append(to_text(results[1]['Value']))
         except Exception as e:
@@ -184,7 +183,7 @@ class LookupModule(LookupBase):
                 if param and len(param) > 0:
                     name, value = param.split('=')
                     if name not in paramvals:
-                        raise AnsibleAssertionError("%s not a valid consul lookup parameter" % name)
+                        raise AnsibleAssertionError(f"{name} not a valid consul lookup parameter")
                     paramvals[name] = value
         except (ValueError, AssertionError) as e:
             raise AnsibleError(e)

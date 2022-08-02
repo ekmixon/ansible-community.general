@@ -183,17 +183,14 @@ def _fs_exists(module, filesystem):
     :return: True or False.
     """
     lsfs_cmd = module.get_bin_path('lsfs', True)
-    rc, lsfs_out, err = module.run_command("%s -l %s" % (lsfs_cmd, filesystem))
-    if rc == 1:
-        if re.findall("No record matching", err):
-            return False
-
-        else:
-            module.fail_json(msg="Failed to run lsfs. Error message: %s" % err)
+    rc, lsfs_out, err = module.run_command(f"{lsfs_cmd} -l {filesystem}")
+    if rc != 1:
+        return True
+    if re.findall("No record matching", err):
+        return False
 
     else:
-
-        return True
+        module.fail_json(msg=f"Failed to run lsfs. Error message: {err}")
 
 
 def _check_nfs_device(module, nfs_host, device):
@@ -206,17 +203,12 @@ def _check_nfs_device(module, nfs_host, device):
     :return: True or False.
     """
     showmount_cmd = module.get_bin_path('showmount', True)
-    rc, showmount_out, err = module.run_command(
-        "%s -a %s" % (showmount_cmd, nfs_host))
+    rc, showmount_out, err = module.run_command(f"{showmount_cmd} -a {nfs_host}")
     if rc != 0:
-        module.fail_json(msg="Failed to run showmount. Error message: %s" % err)
+        module.fail_json(msg=f"Failed to run showmount. Error message: {err}")
     else:
         showmount_data = showmount_out.splitlines()
-        for line in showmount_data:
-            if line.split(':')[1] == device:
-                return True
-
-        return False
+        return any(line.split(':')[1] == device for line in showmount_data)
 
 
 def _validate_vg(module, vg):
@@ -229,22 +221,22 @@ def _validate_vg(module, vg):
              None (VG does not exist), message.
     """
     lsvg_cmd = module.get_bin_path('lsvg', True)
-    rc, current_active_vgs, err = module.run_command("%s -o" % lsvg_cmd)
+    rc, current_active_vgs, err = module.run_command(f"{lsvg_cmd} -o")
     if rc != 0:
-        module.fail_json(msg="Failed executing %s command." % lsvg_cmd)
+        module.fail_json(msg=f"Failed executing {lsvg_cmd} command.")
 
-    rc, current_all_vgs, err = module.run_command("%s" % lsvg_cmd)
+    rc, current_all_vgs, err = module.run_command(f"{lsvg_cmd}")
     if rc != 0:
-        module.fail_json(msg="Failed executing %s command." % lsvg_cmd)
+        module.fail_json(msg=f"Failed executing {lsvg_cmd} command.")
 
     if vg in current_all_vgs and vg not in current_active_vgs:
-        msg = "Volume group %s is in varyoff state." % vg
+        msg = f"Volume group {vg} is in varyoff state."
         return False, msg
     elif vg in current_active_vgs:
-        msg = "Volume group %s is in varyon state." % vg
+        msg = f"Volume group {vg} is in varyon state."
         return True, msg
     else:
-        msg = "Volume group %s does not exist." % vg
+        msg = f"Volume group {vg} does not exist."
         return None, msg
 
 
@@ -252,31 +244,23 @@ def resize_fs(module, filesystem, size):
     """ Resize LVM file system. """
 
     chfs_cmd = module.get_bin_path('chfs', True)
-    if not module.check_mode:
-        rc, chfs_out, err = module.run_command('%s -a size="%s" %s' % (chfs_cmd, size, filesystem))
+    if module.check_mode:
+        return True, ''
+    rc, chfs_out, err = module.run_command('%s -a size="%s" %s' % (chfs_cmd, size, filesystem))
 
-        if rc == 28:
+    if rc == 28:
+        changed = False
+        return changed, chfs_out
+    elif rc != 0:
+        if re.findall('Maximum allocation for logical', err):
             changed = False
-            return changed, chfs_out
-        elif rc != 0:
-            if re.findall('Maximum allocation for logical', err):
-                changed = False
-                return changed, err
-            else:
-                module.fail_json(msg="Failed to run chfs. Error message: %s" % err)
-
+            return changed, err
         else:
-            if re.findall('The filesystem size is already', chfs_out):
-                changed = False
-            else:
-                changed = True
+            module.fail_json(msg=f"Failed to run chfs. Error message: {err}")
 
-            return changed, chfs_out
     else:
-        changed = True
-        msg = ''
-
-        return changed, msg
+        changed = not re.findall('The filesystem size is already', chfs_out)
+        return changed, chfs_out
 
 
 def create_fs(
@@ -304,33 +288,20 @@ def create_fs(
             False: '-A no'
         }
 
-    if size is None:
-        size = ''
-    else:
-        size = "-a size=%s" % size
-
-    if device is None:
-        device = ''
-    else:
-        device = "-d %s" % device
-
+    size = '' if size is None else f"-a size={size}"
+    device = '' if device is None else f"-d {device}"
     if vg is None:
         vg = ''
     else:
         vg_state, msg = _validate_vg(module, vg)
         if vg_state:
-            vg = "-g %s" % vg
+            vg = f"-g {vg}"
         else:
             changed = False
 
             return changed, msg
 
-    if mount_group is None:
-        mount_group = ''
-
-    else:
-        mount_group = "-u %s" % mount_group
-
+    mount_group = '' if mount_group is None else f"-u {mount_group}"
     auto_mount = auto_mount_opt[auto_mount]
     account_subsystem = account_subsys_opt[account_subsystem]
 
@@ -341,10 +312,10 @@ def create_fs(
             rc, mknfsmnt_out, err = module.run_command('%s -f "%s" %s -h "%s" -t "%s" "%s" -w "bg"' % (
                 mknfsmnt_cmd, filesystem, device, nfs_server, permissions, auto_mount))
             if rc != 0:
-                module.fail_json(msg="Failed to run mknfsmnt. Error message: %s" % err)
+                module.fail_json(msg=f"Failed to run mknfsmnt. Error message: {err}")
             else:
                 changed = True
-                msg = "NFS file system %s created." % filesystem
+                msg = f"NFS file system {filesystem} created."
 
                 return changed, msg
         else:
@@ -357,8 +328,8 @@ def create_fs(
         # Creates a LVM file system.
         crfs_cmd = module.get_bin_path('crfs', True)
         if not module.check_mode:
-            cmd = "%s -v %s -m %s %s %s %s %s %s -p %s %s -a %s" % (
-                crfs_cmd, fs_type, filesystem, vg, device, mount_group, auto_mount, account_subsystem, permissions, size, attributes)
+            cmd = f"{crfs_cmd} -v {fs_type} -m {filesystem} {vg} {device} {mount_group} {auto_mount} {account_subsystem} -p {permissions} {size} -a {attributes}"
+
             rc, crfs_out, err = module.run_command(cmd)
 
             if rc == 10:
@@ -367,7 +338,7 @@ def create_fs(
                         "volume group needs to be empty. %s" % err)
 
             elif rc != 0:
-                module.fail_json(msg="Failed to run %s. Error message: %s" % (cmd, err))
+                module.fail_json(msg=f"Failed to run {cmd}. Error message: {err}")
 
             else:
                 changed = True
@@ -382,6 +353,9 @@ def create_fs(
 def remove_fs(module, filesystem, rm_mount_point):
     """ Remove an LVM file system or NFS entry. """
 
+    rmfs_cmd = module.get_bin_path('rmfs', True)
+    if module.check_mode:
+        return True, ''
     # Command parameters.
     rm_mount_point_opt = {
         True: '-r',
@@ -390,22 +364,15 @@ def remove_fs(module, filesystem, rm_mount_point):
 
     rm_mount_point = rm_mount_point_opt[rm_mount_point]
 
-    rmfs_cmd = module.get_bin_path('rmfs', True)
-    if not module.check_mode:
-        cmd = "%s -r %s %s" % (rmfs_cmd, rm_mount_point, filesystem)
-        rc, rmfs_out, err = module.run_command(cmd)
-        if rc != 0:
-            module.fail_json(msg="Failed to run %s. Error message: %s" % (cmd, err))
-        else:
-            changed = True
-            msg = rmfs_out
-            if not rmfs_out:
-                msg = "File system %s removed." % filesystem
-
-            return changed, msg
+    cmd = f"{rmfs_cmd} -r {rm_mount_point} {filesystem}"
+    rc, rmfs_out, err = module.run_command(cmd)
+    if rc != 0:
+        module.fail_json(msg=f"Failed to run {cmd}. Error message: {err}")
     else:
         changed = True
-        msg = ''
+        msg = rmfs_out
+        if not msg:
+            msg = f"File system {filesystem} removed."
 
         return changed, msg
 
@@ -414,19 +381,14 @@ def mount_fs(module, filesystem):
     """ Mount a file system. """
     mount_cmd = module.get_bin_path('mount', True)
 
-    if not module.check_mode:
-        rc, mount_out, err = module.run_command(
-            "%s %s" % (mount_cmd, filesystem))
-        if rc != 0:
-            module.fail_json(msg="Failed to run mount. Error message: %s" % err)
-        else:
-            changed = True
-            msg = "File system %s mounted." % filesystem
-
-            return changed, msg
+    if module.check_mode:
+        return True, ''
+    rc, mount_out, err = module.run_command(f"{mount_cmd} {filesystem}")
+    if rc != 0:
+        module.fail_json(msg=f"Failed to run mount. Error message: {err}")
     else:
         changed = True
-        msg = ''
+        msg = f"File system {filesystem} mounted."
 
         return changed, msg
 
@@ -435,18 +397,14 @@ def unmount_fs(module, filesystem):
     """ Unmount a file system."""
     unmount_cmd = module.get_bin_path('unmount', True)
 
-    if not module.check_mode:
-        rc, unmount_out, err = module.run_command("%s %s" % (unmount_cmd, filesystem))
-        if rc != 0:
-            module.fail_json(msg="Failed to run unmount. Error message: %s" % err)
-        else:
-            changed = True
-            msg = "File system %s unmounted." % filesystem
-
-            return changed, msg
+    if module.check_mode:
+        return True, ''
+    rc, unmount_out, err = module.run_command(f"{unmount_cmd} {filesystem}")
+    if rc != 0:
+        module.fail_json(msg=f"Failed to run unmount. Error message: {err}")
     else:
         changed = True
-        msg = ''
+        msg = f"File system {filesystem} unmounted."
 
         return changed, msg
 

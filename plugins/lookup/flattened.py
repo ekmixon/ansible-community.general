@@ -57,7 +57,7 @@ class LookupModule(LookupBase):
         for term in terms:
             term = self._check_list_of_one_list(term)
 
-            if term == 'None' or term == 'null':
+            if term in ['None', 'null']:
                 # ignore undefined items
                 break
 

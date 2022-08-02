@@ -26,16 +26,13 @@ def initialize_hashids(**kwargs):
     if not HAS_HASHIDS:
         raise AnsibleError("The hashids library must be installed in order to use this plugin")
 
-    params = dict((k, v) for k, v in kwargs.items() if v)
+    params = {k: v for k, v in kwargs.items() if v}
 
     try:
         return Hashids(**params)
     except TypeError as e:
         raise AnsibleFilterError(
-            "The provided parameters %s are invalid: %s" % (
-                ', '.join(["%s=%s" % (k, v) for k, v in params.items()]),
-                to_native(e)
-            )
+            f"""The provided parameters {', '.join([f"{k}={v}" for k, v in params.items()])} are invalid: {to_native(e)}"""
         )
 
 
@@ -64,8 +61,9 @@ def hashids_encode(nums, salt=None, alphabet=None, min_length=None):
         hashid = hashids.encode(*nums)
     except TypeError as e:
         raise AnsibleFilterTypeError(
-            "Data to encode must by a tuple or list of ints: %s" % to_native(e)
+            f"Data to encode must by a tuple or list of ints: {to_native(e)}"
         )
+
 
     return hashid
 

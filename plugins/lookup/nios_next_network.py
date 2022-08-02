@@ -106,7 +106,7 @@ class LookupModule(LookupBase):
         network_obj = wapi.get_object('networkcontainer', {'network': network})
 
         if network_obj is None:
-            raise AnsibleError('unable to find network-container object %s' % network)
+            raise AnsibleError(f'unable to find network-container object {network}')
         num = kwargs.get('num', 1)
         exclude_ip = kwargs.get('exclude', [])
 

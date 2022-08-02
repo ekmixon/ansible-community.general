@@ -17,16 +17,22 @@ def lists_mergeby(l1, l2, index):
         - debug: msg="{{ l1|community.general.lists_mergeby(l2, 'index')|list }}" '''
 
     if not isinstance(l1, Sequence):
-        raise AnsibleFilterError('First argument for community.general.lists_mergeby must be list. %s is %s' %
-                                 (l1, type(l1)))
+        raise AnsibleFilterError(
+            f'First argument for community.general.lists_mergeby must be list. {l1} is {type(l1)}'
+        )
+
 
     if not isinstance(l2, Sequence):
-        raise AnsibleFilterError('Second argument for community.general.lists_mergeby must be list. %s is %s' %
-                                 (l2, type(l2)))
+        raise AnsibleFilterError(
+            f'Second argument for community.general.lists_mergeby must be list. {l2} is {type(l2)}'
+        )
+
 
     if not isinstance(index, string_types):
-        raise AnsibleFilterError('Third argument for community.general.lists_mergeby must be string. %s is %s' %
-                                 (index, type(index)))
+        raise AnsibleFilterError(
+            f'Third argument for community.general.lists_mergeby must be string. {index} is {type(index)}'
+        )
+
 
     d = defaultdict(dict)
     for l in (l1, l2):

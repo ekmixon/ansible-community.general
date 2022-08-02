@@ -23,11 +23,7 @@ def scaleway_argument_spec():
 
 
 def payload_from_object(scw_object):
-    return dict(
-        (k, v)
-        for k, v in scw_object.items()
-        if k != 'id' and v is not None
-    )
+    return {k: v for k, v in scw_object.items() if k != 'id' and v is not None}
 
 
 class ScalewayException(Exception):
@@ -46,17 +42,16 @@ R_RELATION = r'</?(?P<target_IRI>[^>]+)>; rel="(?P<relation>first|previous|next|
 def parse_pagination_link(header):
     if not re.match(R_LINK_HEADER, header, re.VERBOSE):
         raise ScalewayException('Scaleway API answered with an invalid Link pagination header')
-    else:
-        relations = header.split(',')
-        parsed_relations = {}
-        rc_relation = re.compile(R_RELATION)
-        for relation in relations:
-            match = rc_relation.match(relation)
-            if not match:
-                raise ScalewayException('Scaleway API answered with an invalid relation in the Link pagination header')
-            data = match.groupdict()
-            parsed_relations[data['relation']] = data['target_IRI']
-        return parsed_relations
+    relations = header.split(',')
+    parsed_relations = {}
+    rc_relation = re.compile(R_RELATION)
+    for relation in relations:
+        match = rc_relation.match(relation)
+        if not match:
+            raise ScalewayException('Scaleway API answered with an invalid relation in the Link pagination header')
+        data = match.groupdict()
+        parsed_relations[data['relation']] = data['target_IRI']
+    return parsed_relations
 
 
 class Response(object):
@@ -70,9 +65,7 @@ class Response(object):
     @property
     def json(self):
         if not self.body:
-            if "body" in self.info:
-                return json.loads(self.info["body"])
-            return None
+            return json.loads(self.info["body"]) if "body" in self.info else None
         try:
             return json.loads(self.body)
         except ValueError:
@@ -99,13 +92,18 @@ class Scaleway(object):
         self.name = None
 
     def get_resources(self):
-        results = self.get('/%s' % self.name)
+        results = self.get(f'/{self.name}')
 
         if not results.ok:
-            raise ScalewayException('Error fetching {0} ({1}) [{2}: {3}]'.format(
-                self.name, '%s/%s' % (self.module.params.get('api_url'), self.name),
-                results.status_code, results.json['message']
-            ))
+            raise ScalewayException(
+                'Error fetching {0} ({1}) [{2}: {3}]'.format(
+                    self.name,
+                    f"{self.module.params.get('api_url')}/{self.name}",
+                    results.status_code,
+                    results.json['message'],
+                )
+            )
+
 
         return results.json.get(self.name)
 
@@ -117,7 +115,7 @@ class Scaleway(object):
 
         if path[0] == '/':
             path = path[1:]
-        return '%s/%s?%s' % (self.module.params.get('api_url'), path, query_string)
+        return f"{self.module.params.get('api_url')}/{path}?{query_string}"
 
     def send(self, method, path, data=None, headers=None, params=None):
         url = self._url_builder(path=path, params=params)
@@ -142,7 +140,7 @@ class Scaleway(object):
 
     @staticmethod
     def get_user_agent_string(module):
-        return "ansible %s Python %s" % (module.ansible_version, sys.version.split(' ', 1)[0])
+        return f"ansible {module.ansible_version} Python {sys.version.split(' ', 1)[0]}"
 
     def get(self, path, data=None, headers=None, params=None):
         return self.send(method='GET', path=path, data=data, headers=headers, params=params)

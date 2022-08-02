@@ -80,7 +80,7 @@ class CallbackModule(CallbackBase):
                 invocation = data.pop('invocation', None)
                 data = json.dumps(data, cls=AnsibleJSONEncoder)
                 if invocation is not None:
-                    data = json.dumps(invocation) + " => %s " % data
+                    data = json.dumps(invocation) + f" => {data} "
 
         path = os.path.join(self.log_folder, result._host.get_name())
         now = time.strftime(self.TIME_FORMAT, time.localtime())

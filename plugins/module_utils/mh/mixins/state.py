@@ -24,8 +24,11 @@ class StateMixin(object):
 
         # resolve aliases
         if state not in self.module.params:
-            aliased = [name for name, param in self.module.argument_spec.items() if state in param.get('aliases', [])]
-            if aliased:
+            if aliased := [
+                name
+                for name, param in self.module.argument_spec.items()
+                if state in param.get('aliases', [])
+            ]:
                 state = aliased[0]
                 self.vars.effective_state = state
 

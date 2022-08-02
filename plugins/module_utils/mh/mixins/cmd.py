@@ -64,7 +64,7 @@ class ArgFormat(object):
         if isinstance(fmt, str):
             func = _fmts[style]
             self.arg_format = partial(func, fmt)
-        elif isinstance(fmt, list) or isinstance(fmt, tuple):
+        elif isinstance(fmt, (list, tuple)):
             self.arg_format = lambda v: [_fmts[style](f, v)[0] for f in fmt]
         elif hasattr(fmt, '__call__'):
             self.arg_format = fmt
@@ -94,17 +94,14 @@ class CmdMixin(object):
 
     @property
     def module_formats(self):
-        result = {}
-        for param in self.module.params.keys():
-            result[param] = ArgFormat(param)
-        return result
+        return {param: ArgFormat(param) for param in self.module.params.keys()}
 
     @property
     def custom_formats(self):
-        result = {}
-        for param, fmt_spec in self.command_args_formats.items():
-            result[param] = ArgFormat(param, **fmt_spec)
-        return result
+        return {
+            param: ArgFormat(param, **fmt_spec)
+            for param, fmt_spec in self.command_args_formats.items()
+        }
 
     def _calculate_args(self, extra_params=None, params=None):
         def add_arg_formatted_param(_cmd_args, arg_format, _value):
@@ -114,13 +111,16 @@ class CmdMixin(object):
         def find_format(_param):
             return self.custom_formats.get(_param, self.module_formats.get(_param))
 
-        extra_params = extra_params or dict()
-        cmd_args = list([self.command]) if isinstance(self.command, str) else list(self.command)
+        extra_params = extra_params or {}
+        cmd_args = (
+            [self.command] if isinstance(self.command, str) else list(self.command)
+        )
+
         try:
             cmd_args[0] = self.module.get_bin_path(cmd_args[0], required=True)
         except ValueError:
             pass
-        param_list = params if params else self.vars.keys()
+        param_list = params or self.vars.keys()
 
         for param in param_list:
             if isinstance(param, dict):
@@ -163,13 +163,14 @@ class CmdMixin(object):
         self.vars.cmd_args = self._calculate_args(extra_params, params)
         options = dict(self.run_command_fixed_options)
         options['check_rc'] = options.get('check_rc', self.check_rc)
-        options.update(kwargs)
+        options |= kwargs
         env_update = dict(options.get('environ_update', {}))
         if self.force_lang:
-            env_update.update({
+            env_update |= {
                 'LANGUAGE': self.force_lang,
                 'LC_ALL': self.force_lang,
-            })
+            }
+
             self.update_output(force_lang=self.force_lang)
             options['environ_update'] = env_update
         rc, out, err = self.module.run_command(self.vars.cmd_args, *args, **options)

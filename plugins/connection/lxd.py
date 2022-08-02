@@ -87,12 +87,17 @@ class Connection(ConnectionBase):
         local_cmd = [self._lxc_cmd]
         if self.get_option("project"):
             local_cmd.extend(["--project", self.get_option("project")])
-        local_cmd.extend([
-            "exec",
-            "%s:%s" % (self.get_option("remote"), self._host),
-            "--",
-            self._play_context.executable, "-c", cmd
-        ])
+        local_cmd.extend(
+            [
+                "exec",
+                f'{self.get_option("remote")}:{self._host}',
+                "--",
+                self._play_context.executable,
+                "-c",
+                cmd,
+            ]
+        )
+
 
         local_cmd = [to_bytes(i, errors='surrogate_or_strict') for i in local_cmd]
         in_data = to_bytes(in_data, errors='surrogate_or_strict', nonstring='passthru')
@@ -104,10 +109,10 @@ class Connection(ConnectionBase):
         stderr = to_text(stderr)
 
         if stderr == "error: Container is not running.\n":
-            raise AnsibleConnectionFailure("container not running: %s" % self._host)
+            raise AnsibleConnectionFailure(f"container not running: {self._host}")
 
         if stderr == "error: not found\n":
-            raise AnsibleConnectionFailure("container not found: %s" % self._host)
+            raise AnsibleConnectionFailure(f"container not found: {self._host}")
 
         return process.returncode, stdout, stderr
 
@@ -118,16 +123,20 @@ class Connection(ConnectionBase):
         self._display.vvv(u"PUT {0} TO {1}".format(in_path, out_path), host=self._host)
 
         if not os.path.isfile(to_bytes(in_path, errors='surrogate_or_strict')):
-            raise AnsibleFileNotFound("input path is not a file: %s" % in_path)
+            raise AnsibleFileNotFound(f"input path is not a file: {in_path}")
 
         local_cmd = [self._lxc_cmd]
         if self.get_option("project"):
             local_cmd.extend(["--project", self.get_option("project")])
-        local_cmd.extend([
-            "file", "push",
-            in_path,
-            "%s:%s/%s" % (self.get_option("remote"), self._host, out_path)
-        ])
+        local_cmd.extend(
+            [
+                "file",
+                "push",
+                in_path,
+                f'{self.get_option("remote")}:{self._host}/{out_path}',
+            ]
+        )
+
 
         local_cmd = [to_bytes(i, errors='surrogate_or_strict') for i in local_cmd]
 
@@ -143,11 +152,15 @@ class Connection(ConnectionBase):
         local_cmd = [self._lxc_cmd]
         if self.get_option("project"):
             local_cmd.extend(["--project", self.get_option("project")])
-        local_cmd.extend([
-            "file", "pull",
-            "%s:%s/%s" % (self.get_option("remote"), self._host, in_path),
-            out_path
-        ])
+        local_cmd.extend(
+            [
+                "file",
+                "pull",
+                f'{self.get_option("remote")}:{self._host}/{in_path}',
+                out_path,
+            ]
+        )
+
 
         local_cmd = [to_bytes(i, errors='surrogate_or_strict') for i in local_cmd]
 

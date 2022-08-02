@@ -135,15 +135,12 @@ class CallbackModule(CallbackBase):
                                 headers=headers)
             return response.read()
         except Exception as e:
-            self._display.warning(u'Could not submit message to Slack: %s' %
-                                  to_text(e))
+            self._display.warning(f'Could not submit message to Slack: {to_text(e)}')
 
     def v2_playbook_on_start(self, playbook):
         self.playbook_name = os.path.basename(playbook._file_name)
 
-        title = [
-            '*Playbook initiated* (_%s_)' % self.guid
-        ]
+        title = [f'*Playbook initiated* (_{self.guid}_)']
 
         invocation_items = []
         if context.CLIARGS and self.show_invocation:
@@ -153,18 +150,17 @@ class CallbackModule(CallbackBase):
             subset = context.CLIARGS['subset']
             inventory = [os.path.abspath(i) for i in context.CLIARGS['inventory']]
 
-            invocation_items.append('Inventory:  %s' % ', '.join(inventory))
+            invocation_items.append(f"Inventory:  {', '.join(inventory)}")
             if tags and tags != ['all']:
-                invocation_items.append('Tags:       %s' % ', '.join(tags))
+                invocation_items.append(f"Tags:       {', '.join(tags)}")
             if skip_tags:
-                invocation_items.append('Skip Tags:  %s' % ', '.join(skip_tags))
+                invocation_items.append(f"Skip Tags:  {', '.join(skip_tags)}")
             if subset:
-                invocation_items.append('Limit:      %s' % subset)
+                invocation_items.append(f'Limit:      {subset}')
             if extra_vars:
-                invocation_items.append('Extra Vars: %s' %
-                                        ' '.join(extra_vars))
+                invocation_items.append(f"Extra Vars: {' '.join(extra_vars)}")
 
-            title.append('by *%s*' % context.CLIARGS['remote_user'])
+            title.append(f"by *{context.CLIARGS['remote_user']}*")
 
         title.append('\n\n*%s*' % self.playbook_name)
         msg_items = [' '.join(title)]
@@ -189,7 +185,7 @@ class CallbackModule(CallbackBase):
     def v2_playbook_on_play_start(self, play):
         """Display Play start messages"""
 
-        name = play.name or 'Play name not specified (%s)' % play._uuid
+        name = play.name or f'Play name not specified ({play._uuid})'
         msg = '*Starting play* (_%s_)\n\n*%s*' % (self.guid, name)
         attachments = [
             {
@@ -223,10 +219,7 @@ class CallbackModule(CallbackBase):
             t.add_row([h] + [s[k] for k in ['ok', 'changed', 'unreachable',
                                             'failures', 'rescued', 'ignored']])
 
-        attachments = []
-        msg_items = [
-            '*Playbook Complete* (_%s_)' % self.guid
-        ]
+        msg_items = [f'*Playbook Complete* (_{self.guid}_)']
         if failures or unreachable:
             color = 'danger'
             msg_items.append('\n*Failed!*')
@@ -238,15 +231,13 @@ class CallbackModule(CallbackBase):
 
         msg = '\n'.join(msg_items)
 
-        attachments.append({
-            'fallback': msg,
-            'fields': [
-                {
-                    'value': msg
-                }
-            ],
-            'color': color,
-            'mrkdwn_in': ['text', 'fallback', 'fields']
-        })
+        attachments = [
+            {
+                'fallback': msg,
+                'fields': [{'value': msg}],
+                'color': color,
+                'mrkdwn_in': ['text', 'fallback', 'fields'],
+            }
+        ]
 
         self.send_msg(attachments=attachments)

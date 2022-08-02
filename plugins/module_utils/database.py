@@ -64,14 +64,13 @@ def _find_end_quote(identifier, quote_char):
             next_char = identifier[quote + 1]
         except IndexError:
             return accumulate
-        if next_char == quote_char:
-            try:
-                identifier = identifier[quote + 2:]
-                accumulate = accumulate + 2
-            except IndexError:
-                raise UnclosedQuoteError
-        else:
+        if next_char != quote_char:
             return accumulate
+        try:
+            identifier = identifier[quote + 2:]
+            accumulate = accumulate + 2
+        except IndexError:
+            raise UnclosedQuoteError
 
 
 def _identifier_parse(identifier, quote_char):
@@ -87,14 +86,13 @@ def _identifier_parse(identifier, quote_char):
             already_quoted = False
         else:
             if end_quote < len(identifier) - 1:
-                if identifier[end_quote + 1] == '.':
-                    dot = end_quote + 1
-                    first_identifier = identifier[:dot]
-                    next_identifier = identifier[dot + 1:]
-                    further_identifiers = _identifier_parse(next_identifier, quote_char)
-                    further_identifiers.insert(0, first_identifier)
-                else:
+                if identifier[end_quote + 1] != '.':
                     raise SQLParseError('User escaped identifiers must escape extra quotes')
+                dot = end_quote + 1
+                first_identifier = identifier[:dot]
+                next_identifier = identifier[dot + 1:]
+                further_identifiers = _identifier_parse(next_identifier, quote_char)
+                further_identifiers.insert(0, first_identifier)
             else:
                 further_identifiers = [identifier]
 
@@ -151,14 +149,14 @@ def is_input_dangerous(string):
       psycopg2's cursor.execute method parametrized
       (typically with DDL queries).
     """
-    if not string:
-        return False
-
-    for pattern in (PATTERN_1, PATTERN_2, PATTERN_3):
-        if re.search(pattern, string):
-            return True
-
-    return False
+    return (
+        any(
+            re.search(pattern, string)
+            for pattern in (PATTERN_1, PATTERN_2, PATTERN_3)
+        )
+        if string
+        else False
+    )
 
 
 def check_input(module, *args):
@@ -173,14 +171,8 @@ def check_input(module, *args):
                 dangerous_elements.append(elem)
 
         elif isinstance(elem, list):
-            for e in elem:
-                if is_input_dangerous(e):
-                    dangerous_elements.append(e)
-
-        elif elem is None or isinstance(elem, bool):
-            pass
-
-        else:
+            dangerous_elements.extend(e for e in elem if is_input_dangerous(e))
+        elif elem is not None and not isinstance(elem, bool):
             elem = str(elem)
             if is_input_dangerous(elem):
                 dangerous_elements.append(elem)

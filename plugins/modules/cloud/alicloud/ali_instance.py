@@ -724,11 +724,7 @@ def modify_instance(module, instance):
     if not host_name:
         host_name = instance.host_name
 
-    # password can be modified only when restart instance
-    password = ""
-    if state == "restarted":
-        password = module.params['password']
-
+    password = module.params['password'] if state == "restarted" else ""
     # userdata can be modified only when instance is stopped
     setattr(instance, "user_data", instance.describe_user_data())
     user_data = instance.user_data
@@ -748,10 +744,11 @@ def wait_for_instance_modify_charge(ecs, instance_ids, charge_type, delay=10, ti
     try:
         while True:
             instances = ecs.describe_instances(instance_ids=instance_ids)
-            flag = True
-            for inst in instances:
-                if inst and inst.instance_charge_type != charge_type:
-                    flag = False
+            flag = not any(
+                inst and inst.instance_charge_type != charge_type
+                for inst in instances
+            )
+
             if flag:
                 return
             timeout -= delay
@@ -866,7 +863,7 @@ def main():
     if state == 'present':
         if not instance_ids:
             if len(instances) > count:
-                for i in range(0, len(instances) - count):
+                for _ in range(len(instances) - count):
                     inst = instances[len(instances) - 1]
                     if inst.status != 'stopped' and not force:
                         module.fail_json(msg="That to delete instance {0} is failed results from it is running, "
@@ -882,16 +879,15 @@ def main():
                     if re.search(r"-\[\d+,\d+\]-", host_name):
                         module.fail_json(msg='Ordered hostname is not supported, If you want to add an ordered '
                                              'suffix to the hostname, you can set unique_suffix to True')
-                    new_instances = run_instance(module, ecs, count - len(instances))
-                    if new_instances:
+                    if new_instances := run_instance(
+                        module, ecs, count - len(instances)
+                    ):
                         changed = True
                         instances.extend(new_instances)
                 except Exception as e:
                     module.fail_json(msg="Create new instances got an error: {0}".format(e))
 
-        # Security Group join/leave begin
-        security_groups = module.params['security_groups']
-        if security_groups:
+        if security_groups := module.params['security_groups']:
             if not isinstance(security_groups, list):
                 module.fail_json(msg='The parameter security_groups should be a list, aborting')
             for inst in instances:
@@ -926,10 +922,12 @@ def main():
                 ids.append(inst.id)
 
         # Modify instance charge type
-        ids = []
-        for inst in instances:
-            if inst.instance_charge_type != instance_charge_type:
-                ids.append(inst.id)
+        ids = [
+            inst.id
+            for inst in instances
+            if inst.instance_charge_type != instance_charge_type
+        ]
+
         if ids:
             params = {"instance_ids": ids, "instance_charge_type": instance_charge_type,
                       "include_data_disks": module.params['include_data_disks'], "dry_run": module.params['dry_run'],
@@ -962,10 +960,7 @@ def main():
                 module.fail_json(msg='Start instances got an error: {0}'.format(e))
         elif state == 'stopped':
             try:
-                targets = []
-                for inst in instances:
-                    if inst.status != "stopped":
-                        targets.append(inst.id)
+                targets = [inst.id for inst in instances if inst.status != "stopped"]
                 if targets and ecs.stop_instances(instance_ids=targets, force_stop=force):
                     changed = True
                     ids.extend(targets)

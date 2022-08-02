@@ -96,21 +96,14 @@ class CyberarkPassword:
         self.extra_parms = []
         for key, value in kwargs.items():
             self.extra_parms.append('-p')
-            self.extra_parms.append("%s=%s" % (key, value))
+            self.extra_parms.append(f"{key}={value}")
 
         if self.appid is None:
             raise AnsibleError("CyberArk Error: No Application ID specified")
         if self.query is None:
             raise AnsibleError("CyberArk Error: No Vault query specified")
 
-        if self.output is None:
-            # If no output is specified, return at least the password
-            self.output = "password"
-        else:
-            # To avoid reference issues/confusion to values, all
-            # output 'keys' will be in lowercase.
-            self.output = self.output.lower()
-
+        self.output = "password" if self.output is None else self.output.lower()
         self.b_delimiter = b"@#@"  # Known delimiter to split output results
 
     def get(self):
@@ -121,21 +114,24 @@ class CyberarkPassword:
             all_parms = [
                 CLIPASSWORDSDK_CMD,
                 'GetPassword',
-                '-p', 'AppDescs.AppID=%s' % self.appid,
-                '-p', 'Query=%s' % self.query,
-                '-o', self.output,
-                '-d', self.b_delimiter]
+                '-p',
+                f'AppDescs.AppID={self.appid}',
+                '-p',
+                f'Query={self.query}',
+                '-o',
+                self.output,
+                '-d',
+                self.b_delimiter,
+            ]
+
             all_parms.extend(self.extra_parms)
 
-            b_credential = b""
             b_all_params = [to_bytes(v) for v in all_parms]
             tmp_output, tmp_error = Popen(b_all_params, stdout=PIPE, stderr=PIPE, stdin=PIPE).communicate()
 
-            if tmp_output:
-                b_credential = to_bytes(tmp_output)
-
+            b_credential = to_bytes(tmp_output) if tmp_output else b""
             if tmp_error:
-                raise AnsibleError("ERROR => %s " % (tmp_error))
+                raise AnsibleError(f"ERROR => {tmp_error} ")
 
             if b_credential and b_credential.endswith(b'\n'):
                 b_credential = b_credential[:-1]
@@ -155,7 +151,10 @@ class CyberarkPassword:
         except subprocess.CalledProcessError as e:
             raise AnsibleError(e.output)
         except OSError as e:
-            raise AnsibleError("ERROR - AIM not installed or clipasswordsdk not in standard location. ERROR=(%s) => %s " % (to_text(e.errno), e.strerror))
+            raise AnsibleError(
+                f"ERROR - AIM not installed or clipasswordsdk not in standard location. ERROR=({to_text(e.errno)}) => {e.strerror} "
+            )
+
 
         return [result_dict]
 
@@ -169,15 +168,14 @@ class LookupModule(LookupBase):
 
     def run(self, terms, variables=None, **kwargs):
 
-        display.vvvv("%s" % terms)
+        display.vvvv(f"{terms}")
         if isinstance(terms, list):
             return_values = []
             for term in terms:
-                display.vvvv("Term: %s" % term)
+                display.vvvv(f"Term: {term}")
                 cyberark_conn = CyberarkPassword(**term)
                 return_values.append(cyberark_conn.get())
             return return_values
         else:
             cyberark_conn = CyberarkPassword(**terms)
-            result = cyberark_conn.get()
-            return result
+            return cyberark_conn.get()

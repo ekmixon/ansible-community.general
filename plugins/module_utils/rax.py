@@ -62,21 +62,14 @@ def rax_to_dict(obj, obj_type='standard'):
     for key in dir(obj):
         value = getattr(obj, key)
         if obj_type == 'clb' and key == 'nodes':
-            instance[key] = []
-            for node in value:
-                instance[key].append(rax_clb_node_to_dict(node))
+            instance[key] = [rax_clb_node_to_dict(node) for node in value]
         elif (isinstance(value, list) and len(value) > 0 and
                 not isinstance(value[0], NON_CALLABLES)):
-            instance[key] = []
-            for item in value:
-                instance[key].append(rax_to_dict(item))
+            instance[key] = [rax_to_dict(item) for item in value]
         elif (isinstance(value, NON_CALLABLES) and not key.startswith('_')):
             if obj_type == 'server':
                 if key == 'image':
-                    if not value:
-                        instance['rax_boot_source'] = 'volume'
-                    else:
-                        instance['rax_boot_source'] = 'local'
+                    instance['rax_boot_source'] = 'local' if value else 'volume'
                 key = rax_slugify(key)
             instance[key] = value
 
@@ -98,19 +91,14 @@ def rax_find_bootable_volume(module, rax_module, server, exit=True):
         vol = cbs.get(volume)
         if module.boolean(vol.bootable):
             bootable_volumes.append(vol)
-    if not bootable_volumes:
-        if exit:
-            module.fail_json(msg='No bootable volumes could be found for '
-                                 'server %s' % server_id)
-        else:
-            return False
+    if not bootable_volumes and exit:
+        module.fail_json(msg='No bootable volumes could be found for '
+                             'server %s' % server_id)
+    elif not bootable_volumes or len(bootable_volumes) > 1 and not exit:
+        return False
     elif len(bootable_volumes) > 1:
-        if exit:
-            module.fail_json(msg='Multiple bootable volumes found for server '
-                                 '%s' % server_id)
-        else:
-            return False
-
+        module.fail_json(msg='Multiple bootable volumes found for server '
+                             '%s' % server_id)
     return bootable_volumes[0]
 
 
@@ -122,15 +110,14 @@ def rax_find_image(module, rax_module, image, exit=True):
     except ValueError:
         try:
             image = cs.images.find(human_id=image)
-        except(cs.exceptions.NotFound,
+        except (cs.exceptions.NotFound,
                cs.exceptions.NoUniqueMatch):
             try:
                 image = cs.images.find(name=image)
             except (cs.exceptions.NotFound,
                     cs.exceptions.NoUniqueMatch):
                 if exit:
-                    module.fail_json(msg='No matching image found (%s)' %
-                                         image)
+                    module.fail_json(msg=f'No matching image found ({image})')
                 else:
                     return False
 
@@ -149,7 +136,7 @@ def rax_find_volume(module, rax_module, name):
         except rax_module.exc.NotFound:
             volume = None
         except Exception as e:
-            module.fail_json(msg='%s' % e)
+            module.fail_json(msg=f'{e}')
     return volume
 
 
@@ -168,8 +155,7 @@ def rax_find_network(module, rax_module, network):
                 network_obj = cnw.find_network_by_label(network)
             except (rax_module.exceptions.NetworkNotFound,
                     rax_module.exceptions.NetworkLabelNotUnique):
-                module.fail_json(msg='No matching network found (%s)' %
-                                     network)
+                module.fail_json(msg=f'No matching network found ({network})')
             else:
                 return cnw.get_server_networks(network_obj)
     else:
@@ -183,7 +169,7 @@ def rax_find_server(module, rax_module, server):
         UUID(server)
         server = cs.servers.get(server)
     except ValueError:
-        servers = cs.servers.list(search_opts=dict(name='^%s$' % server))
+        servers = cs.servers.list(search_opts=dict(name=f'^{server}$'))
         if not servers:
             module.fail_json(msg='No Server was matched by name, '
                                  'try using the Server ID instead')
@@ -203,11 +189,7 @@ def rax_find_loadbalancer(module, rax_module, loadbalancer):
     try:
         found = clb.get(loadbalancer)
     except Exception:
-        found = []
-        for lb in clb.list():
-            if loadbalancer == lb.name:
-                found.append(lb)
-
+        found = [lb for lb in clb.list() if loadbalancer == lb.name]
         if not found:
             module.fail_json(msg='No loadbalancer was matched')
 
@@ -248,8 +230,10 @@ def rax_required_together():
 
 def setup_rax_module(module, rax_module, region_required=True):
     """Set up pyrax in a standard way for all modules"""
-    rax_module.USER_AGENT = 'ansible/%s %s' % (module.ansible_version,
-                                               rax_module.USER_AGENT)
+    rax_module.USER_AGENT = (
+        f'ansible/{module.ansible_version} {rax_module.USER_AGENT}'
+    )
+
 
     api_key = module.params.get('api_key')
     auth_endpoint = module.params.get('auth_endpoint')
@@ -288,7 +272,7 @@ def setup_rax_module(module, rax_module, region_required=True):
         region = (region or os.environ.get('RAX_REGION') or
                   rax_module.get_setting('region'))
     except KeyError as e:
-        module.fail_json(msg='Unable to load %s' % e.message)
+        module.fail_json(msg=f'Unable to load {e.message}')
 
     try:
         if api_key and username:
@@ -303,14 +287,13 @@ def setup_rax_module(module, rax_module, region_required=True):
         else:
             raise Exception('No credentials supplied!')
     except Exception as e:
-        if e.message:
-            msg = str(e.message)
-        else:
-            msg = repr(e)
+        msg = str(e.message) if e.message else repr(e)
         module.fail_json(msg=msg)
 
     if region_required and region not in rax_module.regions:
-        module.fail_json(msg='%s is not a valid region, must be one of: %s' %
-                         (region, ','.join(rax_module.regions)))
+        module.fail_json(
+            msg=f"{region} is not a valid region, must be one of: {','.join(rax_module.regions)}"
+        )
+
 
     return rax_module

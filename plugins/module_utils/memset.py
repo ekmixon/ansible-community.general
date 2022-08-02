@@ -42,11 +42,7 @@ def memset_api_call(api_key, api_method, payload=None):
 
     # if we've already started preloading the payload then copy it
     # and use that, otherwise we need to isntantiate it.
-    if payload is None:
-        payload = dict()
-    else:
-        payload = payload.copy()
-
+    payload = {} if payload is None else payload.copy()
     # set some sane defaults
     has_failed = False
     msg = None
@@ -118,11 +114,10 @@ def get_zone_id(zone_name, current_zones):
     '''
     zone_exists = False
     zone_id, msg = None, None
-    zone_list = []
+    zone_list = [
+        zone['id'] for zone in current_zones if zone['nickname'] == zone_name
+    ]
 
-    for zone in current_zones:
-        if zone['nickname'] == zone_name:
-            zone_list.append(zone['id'])
 
     counter = len(zone_list)
 

@@ -47,7 +47,7 @@ def transform_list_to_dict(list_):
 
     for value in list_:
         if isinstance(value, Mapping):
-            ret.update(value)
+            ret |= value
         else:
             ret[to_native(value, errors='surrogate_or_strict')] = True
 
@@ -229,8 +229,8 @@ class OneViewModuleBase(object):
 
     def _build_argument_spec(self, additional_arg_spec, validate_etag_support):
 
-        merged_arg_spec = dict()
-        merged_arg_spec.update(self.ONEVIEW_COMMON_ARGS)
+        merged_arg_spec = {}
+        merged_arg_spec |= self.ONEVIEW_COMMON_ARGS
 
         if validate_etag_support:
             merged_arg_spec.update(self.ONEVIEW_VALIDATE_ETAG_ARGS)
@@ -278,9 +278,10 @@ class OneViewModuleBase(object):
 
         """
         try:
-            if self.validate_etag_support:
-                if not self.module.params.get('validate_etag'):
-                    self.oneview_client.connection.disable_etag_validation()
+            if self.validate_etag_support and not self.module.params.get(
+                'validate_etag'
+            ):
+                self.oneview_client.connection.disable_etag_validation()
 
             result = self.execute_module()
 
@@ -403,7 +404,7 @@ class OneViewModuleBase(object):
 
         # The first resource is True / Not Null and the second resource is False / Null
         if resource1 and not resource2:
-            self.module.log("resource1 and not resource2. " + debug_resources)
+            self.module.log(f"resource1 and not resource2. {debug_resources}")
             return False
 
         # Checks all keys in first dict against the second dict
@@ -432,11 +433,10 @@ class OneViewModuleBase(object):
 
         # Checks all keys in the second dict, looking for missing elements
         for key in resource2.keys():
-            if key not in resource1:
-                if resource2[key] is not None:
-                    # Inexistent key is equivalent to exist with value None
-                    self.module.log(self.MSG_DIFF_AT_KEY.format(key) + debug_resources)
-                    return False
+            if key not in resource1 and resource2[key] is not None:
+                # Inexistent key is equivalent to exist with value None
+                self.module.log(self.MSG_DIFF_AT_KEY.format(key) + debug_resources)
+                return False
 
         return True
 
@@ -457,11 +457,11 @@ class OneViewModuleBase(object):
 
         # The second list is null / empty  / False
         if not resource2:
-            self.module.log("resource 2 is null. " + debug_resources)
+            self.module.log(f"resource 2 is null. {debug_resources}")
             return False
 
         if len(resource1) != len(resource2):
-            self.module.log("resources have different length. " + debug_resources)
+            self.module.log(f"resources have different length. {debug_resources}")
             return False
 
         resource1 = sorted(resource1, key=_str_sorted)
@@ -471,15 +471,15 @@ class OneViewModuleBase(object):
             if isinstance(val, Mapping):
                 # change comparison function to compare dictionaries
                 if not self.compare(val, resource2[i]):
-                    self.module.log("resources are different. " + debug_resources)
+                    self.module.log(f"resources are different. {debug_resources}")
                     return False
             elif isinstance(val, list):
                 # recursive call
                 if not self.compare_list(val, resource2[i]):
-                    self.module.log("lists are different. " + debug_resources)
+                    self.module.log(f"lists are different. {debug_resources}")
                     return False
             elif _standardize_value(val) != _standardize_value(resource2[i]):
-                self.module.log("values are different. " + debug_resources)
+                self.module.log(f"values are different. {debug_resources}")
                 return False
 
         # no differences found

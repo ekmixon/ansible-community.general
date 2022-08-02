@@ -61,10 +61,7 @@ class Connection(ConnectionBase):
 
         self._remote_vmname = self._play_context.remote_addr
         self._connected = False
-        # Default username in Qubes
-        self.user = "user"
-        if self._play_context.remote_user:
-            self.user = self._play_context.remote_user
+        self.user = self._play_context.remote_user or "user"
 
     def _qubes(self, cmd=None, in_data=None, shell="qubes.VMShell"):
         """run qvm-run executable
@@ -76,23 +73,18 @@ class Connection(ConnectionBase):
         display.vvvv("CMD: ", cmd)
         if not cmd.endswith("\n"):
             cmd = cmd + "\n"
-        local_cmd = []
+        local_cmd = ["qvm-run", "--pass-io", "--service"]
 
-        # For dom0
-        local_cmd.extend(["qvm-run", "--pass-io", "--service"])
         if self.user != "user":
             # Means we have a remote_user value
             local_cmd.extend(["-u", self.user])
 
-        local_cmd.append(self._remote_vmname)
-
-        local_cmd.append(shell)
-
+        local_cmd.extend((self._remote_vmname, shell))
         local_cmd = [to_bytes(i, errors='surrogate_or_strict') for i in local_cmd]
 
         display.vvvv("Local cmd: ", local_cmd)
 
-        display.vvv("RUN %s" % (local_cmd,), host=self._remote_vmname)
+        display.vvv(f"RUN {local_cmd}", host=self._remote_vmname)
         p = subprocess.Popen(local_cmd, shell=False, stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
@@ -111,7 +103,7 @@ class Connection(ConnectionBase):
         """Run specified command in a running QubesVM """
         super(Connection, self).exec_command(cmd, in_data=in_data, sudoable=sudoable)
 
-        display.vvvv("CMD IS: %s" % cmd)
+        display.vvvv(f"CMD IS: {cmd}")
 
         rc, stdout, stderr = self._qubes(cmd)
 
@@ -121,7 +113,7 @@ class Connection(ConnectionBase):
     def put_file(self, in_path, out_path):
         """ Place a local file located in 'in_path' inside VM at 'out_path' """
         super(Connection, self).put_file(in_path, out_path)
-        display.vvv("PUT %s TO %s" % (in_path, out_path), host=self._remote_vmname)
+        display.vvv(f"PUT {in_path} TO {out_path}", host=self._remote_vmname)
 
         with open(in_path, "rb") as fobj:
             source_data = fobj.read()
@@ -138,7 +130,7 @@ class Connection(ConnectionBase):
     def fetch_file(self, in_path, out_path):
         """Obtain file specified via 'in_path' from the container and place it at 'out_path' """
         super(Connection, self).fetch_file(in_path, out_path)
-        display.vvv("FETCH %s TO %s" % (in_path, out_path), host=self._remote_vmname)
+        display.vvv(f"FETCH {in_path} TO {out_path}", host=self._remote_vmname)
 
         # We are running in dom0
         cmd_args_list = ["qvm-run", "--pass-io", self._remote_vmname, "cat {0}".format(in_path)]

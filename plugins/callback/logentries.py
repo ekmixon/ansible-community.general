@@ -148,16 +148,14 @@ class PlainTextSocketAppender(object):
                 self.open_connection()
                 return
             except Exception as e:
-                self._display.vvvv(u"Unable to connect to Logentries: %s" % to_text(e))
+                self._display.vvvv(f"Unable to connect to Logentries: {to_text(e)}")
 
             root_delay *= 2
-            if root_delay > self.MAX_DELAY:
-                root_delay = self.MAX_DELAY
-
+            root_delay = min(root_delay, self.MAX_DELAY)
             wait_for = root_delay + random.uniform(0, root_delay)
 
             try:
-                self._display.vvvv("sleeping %s before retry" % wait_for)
+                self._display.vvvv(f"sleeping {wait_for} before retry")
                 time.sleep(wait_for)
             except KeyboardInterrupt:
                 raise
@@ -248,7 +246,10 @@ class CallbackModule(CallbackBase):
             self.use_tls = self.get_option('use_tls')
             self.flatten = self.get_option('flatten')
         except KeyError as e:
-            self._display.warning(u"Missing option for Logentries callback plugin: %s" % to_text(e))
+            self._display.warning(
+                f"Missing option for Logentries callback plugin: {to_text(e)}"
+            )
+
             self.disabled = True
 
         try:
@@ -267,10 +268,13 @@ class CallbackModule(CallbackBase):
 
         if not self.disabled:
             if self.use_tls:
-                self._display.vvvv("Connecting to %s:%s with TLS" % (self.api_url, self.api_tls_port))
+                self._display.vvvv(
+                    f"Connecting to {self.api_url}:{self.api_tls_port} with TLS"
+                )
+
                 self._appender = TLSSocketAppender(display=self._display, LE_API=self.api_url, LE_TLS_PORT=self.api_tls_port)
             else:
-                self._display.vvvv("Connecting to %s:%s" % (self.api_url, self.api_port))
+                self._display.vvvv(f"Connecting to {self.api_url}:{self.api_port}")
                 self._appender = PlainTextSocketAppender(display=self._display, LE_API=self.api_url, LE_PORT=self.api_port)
             self._appender.reopen_connection()
 
@@ -318,9 +322,7 @@ class CallbackModule(CallbackBase):
         self.emit_formatted(results)
 
     def v2_playbook_on_play_start(self, play):
-        results = {}
-        results['le_jobid'] = self.le_jobid
-        results['started_by'] = os.getlogin()
+        results = {'le_jobid': self.le_jobid, 'started_by': os.getlogin()}
         if play.name:
             results['play'] = play.name
         results['hosts'] = play.hosts

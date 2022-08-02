@@ -278,7 +278,4 @@ class LookupModule(LookupBase):
 
         op.assert_logged_in()
 
-        values = []
-        for term in terms:
-            values.append(op.get_field(term, field, section, vault))
-        return values
+        return [op.get_field(term, field, section, vault) for term in terms]

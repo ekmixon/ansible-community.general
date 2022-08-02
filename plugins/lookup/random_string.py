@@ -148,7 +148,7 @@ class LookupModule(LookupBase):
             raise AnsibleLookupError(
                 "Available characters cannot be None, please change constraints"
             )
-        return "".join(random_generator.choice(chars) for dummy in range(length))
+        return "".join(random_generator.choice(chars) for _ in range(length))
 
     @staticmethod
     def b64encode(string_value, encoding="utf-8"):
@@ -181,9 +181,7 @@ class LookupModule(LookupBase):
             lower = self.get_option("lower")
             numbers = self.get_option("numbers")
             special = self.get_option("special")
-            override_special = self.get_option("override_special")
-
-            if override_special:
+            if override_special := self.get_option("override_special"):
                 special_chars = override_special
 
             if upper:

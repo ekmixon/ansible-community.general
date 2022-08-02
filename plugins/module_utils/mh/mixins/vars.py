@@ -47,10 +47,14 @@ class VarMeta(object):
 
     @property
     def diff_result(self):
-        return None if not (self.diff and self.has_changed) else {
-            'before': self.initial_value,
-            'after': self.value,
-        }
+        return (
+            {
+                'before': self.initial_value,
+                'after': self.value,
+            }
+            if (self.diff and self.has_changed)
+            else None
+        )
 
     def __str__(self):
         return "<VarMeta: value={0}, initial={1}, diff={2}, output={3}, change={4}>".format(
@@ -60,8 +64,8 @@ class VarMeta(object):
 
 class VarDict(object):
     def __init__(self):
-        self._data = dict()
-        self._meta = dict()
+        self._data = {}
+        self._meta = {}
 
     def __getitem__(self, item):
         return self._data[item]
@@ -91,28 +95,24 @@ class VarDict(object):
         if name in ('_data', '_meta'):
             raise ValueError("Names _data and _meta are reserved for use by ModuleHelper")
         self._data[name] = value
-        if name in self._meta:
-            meta = self.meta(name)
-        else:
-            meta = VarMeta(**kwargs)
+        meta = self.meta(name) if name in self._meta else VarMeta(**kwargs)
         meta.set_value(value)
         self._meta[name] = meta
 
     def output(self):
-        return dict((k, v) for k, v in self._data.items() if self.meta(k).output)
+        return {k: v for k, v in self._data.items() if self.meta(k).output}
 
     def diff(self):
         diff_results = [(k, self.meta(k).diff_result) for k in self._data]
-        diff_results = [dr for dr in diff_results if dr[1] is not None]
-        if diff_results:
-            before = dict((dr[0], dr[1]['before']) for dr in diff_results)
-            after = dict((dr[0], dr[1]['after']) for dr in diff_results)
+        if diff_results := [dr for dr in diff_results if dr[1] is not None]:
+            before = {dr[0]: dr[1]['before'] for dr in diff_results}
+            after = {dr[0]: dr[1]['after'] for dr in diff_results}
             return {'before': before, 'after': after}
         return None
 
     def facts(self):
-        facts_result = dict((k, v) for k, v in self._data.items() if self._meta[k].fact)
-        return facts_result if facts_result else None
+        facts_result = {k: v for k, v in self._data.items() if self._meta[k].fact}
+        return facts_result or None
 
     def change_vars(self):
         return [v for v in self._data if self.meta(v).change]

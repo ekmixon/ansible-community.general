@@ -59,7 +59,7 @@ class ActionModule(ActionBase):
             return async_action.run(task_vars=task_vars)
 
         # At least one iteration is required, even if timeout is 0.
-        for dummy in range(max(1, timeout)):
+        for _ in range(max(1, timeout)):
             async_result = async_action.run(task_vars=task_vars)
             if async_result.get('finished', 0) == 1:
                 break
@@ -114,10 +114,10 @@ class ActionModule(ActionBase):
                     # remote and local sides (if not the same, make the loop
                     # longer on the controller); and set a backup file path.
                     module_args['_timeout'] = task_async
-                    module_args['_back'] = '%s/iptables.state' % async_dir
+                    module_args['_back'] = f'{async_dir}/iptables.state'
                     async_status_args = dict(mode='status')
-                    confirm_cmd = 'rm -f %s' % module_args['_back']
-                    starter_cmd = 'touch %s.starter' % module_args['_back']
+                    confirm_cmd = f"rm -f {module_args['_back']}"
+                    starter_cmd = f"touch {module_args['_back']}.starter"
                     remaining_time = max(task_async, max_timeout)
 
             # do work!

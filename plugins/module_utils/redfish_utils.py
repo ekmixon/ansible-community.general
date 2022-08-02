@@ -70,7 +70,7 @@ class RedfishUtils(object):
                             follow_redirects='all',
                             use_proxy=True, timeout=self.timeout)
             data = json.loads(to_native(resp.read()))
-            headers = dict((k.lower(), v) for (k, v) in resp.info().items())
+            headers = {k.lower(): v for (k, v) in resp.info().items()}
         except HTTPError as e:
             msg = self._get_extended_message(e)
             return {'ret': False,
@@ -80,7 +80,6 @@ class RedfishUtils(object):
         except URLError as e:
             return {'ret': False, 'msg': "URL Error on GET request to '%s': '%s'"
                                          % (uri, e.reason)}
-        # Almost all errors should be caught above, but just in case
         except Exception as e:
             return {'ret': False,
                     'msg': "Failed GET request to '%s': '%s'" % (uri, to_text(e))}
@@ -96,7 +95,7 @@ class RedfishUtils(object):
                             force_basic_auth=basic_auth, validate_certs=False,
                             follow_redirects='all',
                             use_proxy=True, timeout=self.timeout)
-            headers = dict((k.lower(), v) for (k, v) in resp.info().items())
+            headers = {k.lower(): v for (k, v) in resp.info().items()}
         except HTTPError as e:
             msg = self._get_extended_message(e)
             return {'ret': False,
@@ -106,7 +105,6 @@ class RedfishUtils(object):
         except URLError as e:
             return {'ret': False, 'msg': "URL Error on POST request to '%s': '%s'"
                                          % (uri, e.reason)}
-        # Almost all errors should be caught above, but just in case
         except Exception as e:
             return {'ret': False,
                     'msg': "Failed POST request to '%s': '%s'" % (uri, to_text(e))}
@@ -116,11 +114,7 @@ class RedfishUtils(object):
         req_headers = dict(PATCH_HEADERS)
         r = self.get_request(uri)
         if r['ret']:
-            # Get etag from etag header or @odata.etag property
-            etag = r['headers'].get('etag')
-            if not etag:
-                etag = r['data'].get('@odata.etag')
-            if etag:
+            if etag := r['headers'].get('etag') or r['data'].get('@odata.etag'):
                 req_headers['If-Match'] = etag
         username, password, basic_auth = self._auth_params(req_headers)
         try:
@@ -200,16 +194,15 @@ class RedfishUtils(object):
         data = response['data']
         if 'AccountService' not in data:
             return {'ret': False, 'msg': "AccountService resource not found"}
-        else:
-            account_service = data["AccountService"]["@odata.id"]
-            response = self.get_request(self.root_uri + account_service)
-            if response['ret'] is False:
-                return response
-            data = response['data']
-            accounts = data['Accounts']['@odata.id']
-            if accounts[-1:] == '/':
-                accounts = accounts[:-1]
-            self.accounts_uri = accounts
+        account_service = data["AccountService"]["@odata.id"]
+        response = self.get_request(self.root_uri + account_service)
+        if response['ret'] is False:
+            return response
+        data = response['data']
+        accounts = data['Accounts']['@odata.id']
+        if accounts[-1:] == '/':
+            accounts = accounts[:-1]
+        self.accounts_uri = accounts
         return {'ret': True}
 
     def _find_sessionservice_resource(self):
@@ -219,16 +212,15 @@ class RedfishUtils(object):
         data = response['data']
         if 'SessionService' not in data:
             return {'ret': False, 'msg': "SessionService resource not found"}
-        else:
-            session_service = data["SessionService"]["@odata.id"]
-            response = self.get_request(self.root_uri + session_service)
-            if response['ret'] is False:
-                return response
-            data = response['data']
-            sessions = data['Sessions']['@odata.id']
-            if sessions[-1:] == '/':
-                sessions = sessions[:-1]
-            self.sessions_uri = sessions
+        session_service = data["SessionService"]["@odata.id"]
+        response = self.get_request(self.root_uri + session_service)
+        if response['ret'] is False:
+            return response
+        data = response['data']
+        sessions = data['Sessions']['@odata.id']
+        if sessions[-1:] == '/':
+            sessions = sessions[:-1]
+        self.sessions_uri = sessions
         return {'ret': True}
 
     def _get_resource_uri_by_id(self, uris, id_prop):
@@ -263,9 +255,7 @@ class RedfishUtils(object):
                 self.systems_uri = self._get_resource_uri_by_id(self.systems_uris,
                                                                 self.resource_id)
                 if not self.systems_uri:
-                    return {
-                        'ret': False,
-                        'msg': "System resource %s not found" % self.resource_id}
+                    return {'ret': False, 'msg': f"System resource {self.resource_id} not found"}
             elif len(self.systems_uris) > 1:
                 self.module.fail_json(msg=FAIL_MSG % {'resource': 'System'})
         return {'ret': True}
@@ -277,19 +267,18 @@ class RedfishUtils(object):
         data = response['data']
         if 'UpdateService' not in data:
             return {'ret': False, 'msg': "UpdateService resource not found"}
-        else:
-            update = data["UpdateService"]["@odata.id"]
-            self.update_uri = update
-            response = self.get_request(self.root_uri + update)
-            if response['ret'] is False:
-                return response
-            data = response['data']
-            self.firmware_uri = self.software_uri = None
-            if 'FirmwareInventory' in data:
-                self.firmware_uri = data['FirmwareInventory'][u'@odata.id']
-            if 'SoftwareInventory' in data:
-                self.software_uri = data['SoftwareInventory'][u'@odata.id']
-            return {'ret': True}
+        update = data["UpdateService"]["@odata.id"]
+        self.update_uri = update
+        response = self.get_request(self.root_uri + update)
+        if response['ret'] is False:
+            return response
+        data = response['data']
+        self.firmware_uri = self.software_uri = None
+        if 'FirmwareInventory' in data:
+            self.firmware_uri = data['FirmwareInventory'][u'@odata.id']
+        if 'SoftwareInventory' in data:
+            self.software_uri = data['SoftwareInventory'][u'@odata.id']
+        return {'ret': True}
 
     def _find_chassis_resource(self):
         response = self.get_request(self.root_uri + self.service_root)
@@ -313,9 +302,7 @@ class RedfishUtils(object):
                 self.chassis_uri = self._get_resource_uri_by_id(self.chassis_uris,
                                                                 self.resource_id)
                 if not self.chassis_uri:
-                    return {
-                        'ret': False,
-                        'msg': "Chassis resource %s not found" % self.resource_id}
+                    return {'ret': False, 'msg': f"Chassis resource {self.resource_id} not found"}
             elif len(self.chassis_uris) > 1:
                 self.module.fail_json(msg=FAIL_MSG % {'resource': 'Chassis'})
         return {'ret': True}
@@ -342,9 +329,7 @@ class RedfishUtils(object):
                 self.manager_uri = self._get_resource_uri_by_id(self.manager_uris,
                                                                 self.resource_id)
                 if not self.manager_uri:
-                    return {
-                        'ret': False,
-                        'msg': "Manager resource %s not found" % self.resource_id}
+                    return {'ret': False, 'msg': f"Manager resource {self.resource_id} not found"}
             elif len(self.manager_uris) > 1:
                 self.module.fail_json(msg=FAIL_MSG % {'resource': 'Manager'})
         return {'ret': True}
@@ -362,12 +347,14 @@ class RedfishUtils(object):
                 data = response['data']
                 if 'Parameters' in data:
                     params = data['Parameters']
-                    ai = dict((p['Name'], p)
-                              for p in params if 'Name' in p)
+                    ai = {p['Name']: p for p in params if 'Name' in p}
         if not ai:
-            ai = dict((k[:-24],
-                       {'AllowableValues': v}) for k, v in action.items()
-                      if k.endswith('@Redfish.AllowableValues'))
+            ai = {
+                k[:-24]: {'AllowableValues': v}
+                for k, v in action.items()
+                if k.endswith('@Redfish.AllowableValues')
+            }
+
         return ai
 
     def _get_allowable_values(self, action, name, default_values=None):
@@ -410,21 +397,19 @@ class RedfishUtils(object):
 
         # For each entry in LogServices, get log name and all log entries
         for log_svcs_uri in log_svcs_uri_list:
-            logs = {}
             list_of_log_entries = []
             response = self.get_request(self.root_uri + log_svcs_uri)
             if response['ret'] is False:
                 return response
             data = response['data']
-            logs['Description'] = data.get('Description',
-                                           'Collection of log entries')
+            logs = {'Description': data.get('Description', 'Collection of log entries')}
             # Get all log entries for each type of log found
             for logEntry in data.get('Members', []):
-                entry = {}
-                for prop in properties:
-                    if prop in logEntry:
-                        entry[prop] = logEntry.get(prop)
-                if entry:
+                if entry := {
+                    prop: logEntry.get(prop)
+                    for prop in properties
+                    if prop in logEntry
+                }:
                     list_of_log_entries.append(entry)
             log_name = log_svcs_uri.split('/')[-1]
             logs[log_name] = list_of_log_entries
@@ -455,11 +440,10 @@ class RedfishUtils(object):
                 return response
             _data = response['data']
             # Check to make sure option is available, otherwise error is ugly
-            if "Actions" in _data:
-                if "#LogService.ClearLog" in _data[u"Actions"]:
-                    self.post_request(self.root_uri + _data[u"Actions"]["#LogService.ClearLog"]["target"], {})
-                    if response['ret'] is False:
-                        return response
+            if "Actions" in _data and "#LogService.ClearLog" in _data[u"Actions"]:
+                self.post_request(self.root_uri + _data[u"Actions"]["#LogService.ClearLog"]["target"], {})
+                if response['ret'] is False:
+                    return response
         return {'ret': True}
 
     def aggregate(self, func, uri_list, uri_name):
@@ -483,15 +467,7 @@ class RedfishUtils(object):
         return self.aggregate(func, self.systems_uris, 'system_uri')
 
     def get_storage_controller_inventory(self, systems_uri):
-        result = {}
         controller_list = []
-        controller_results = []
-        # Get these entries, but does not fail if not found
-        properties = ['CacheSummary', 'FirmwareVersion', 'Identifiers',
-                      'Location', 'Manufacturer', 'Model', 'Name', 'Id',
-                      'PartNumber', 'SerialNumber', 'SpeedGbps', 'Status']
-        key = "StorageControllers"
-
         # Find Storage service
         response = self.get_request(self.root_uri + systems_uri)
         if response['ret'] is False:
@@ -506,29 +482,35 @@ class RedfishUtils(object):
         response = self.get_request(self.root_uri + storage_uri)
         if response['ret'] is False:
             return response
-        result['ret'] = True
+        result = {'ret': True}
         data = response['data']
 
-        # Loop through Members and their StorageControllers
-        # and gather properties from each StorageController
-        if data[u'Members']:
-            for storage_member in data[u'Members']:
-                storage_member_uri = storage_member[u'@odata.id']
-                response = self.get_request(self.root_uri + storage_member_uri)
-                data = response['data']
-
-                if key in data:
-                    controller_list = data[key]
-                    for controller in controller_list:
-                        controller_result = {}
-                        for property in properties:
-                            if property in controller:
-                                controller_result[property] = controller[property]
-                        controller_results.append(controller_result)
-                result['entries'] = controller_results
-            return result
-        else:
+        if not data[u'Members']:
             return {'ret': False, 'msg': "Storage resource not found"}
+        controller_results = []
+        # Get these entries, but does not fail if not found
+        properties = ['CacheSummary', 'FirmwareVersion', 'Identifiers',
+                      'Location', 'Manufacturer', 'Model', 'Name', 'Id',
+                      'PartNumber', 'SerialNumber', 'SpeedGbps', 'Status']
+        key = "StorageControllers"
+
+        for storage_member in data[u'Members']:
+            storage_member_uri = storage_member[u'@odata.id']
+            response = self.get_request(self.root_uri + storage_member_uri)
+            data = response['data']
+
+            if key in data:
+                controller_list = data[key]
+                for controller in controller_list:
+                    controller_result = {
+                        property: controller[property]
+                        for property in properties
+                        if property in controller
+                    }
+
+                    controller_results.append(controller_result)
+            result['entries'] = controller_results
+        return result
 
     def get_multi_storage_controller_inventory(self):
         return self.aggregate_systems(self.get_storage_controller_inventory)
@@ -564,8 +546,10 @@ class RedfishUtils(object):
             data = response['data']
 
             if data[u'Members']:
-                for controller in data[u'Members']:
-                    controller_list.append(controller[u'@odata.id'])
+                controller_list.extend(
+                    controller[u'@odata.id'] for controller in data[u'Members']
+                )
+
                 for c in controller_list:
                     uri = self.root_uri + c
                     response = self.get_request(uri)
@@ -574,13 +558,12 @@ class RedfishUtils(object):
                     data = response['data']
                     controller_name = 'Controller 1'
                     if 'StorageControllers' in data:
-                        sc = data['StorageControllers']
-                        if sc:
+                        if sc := data['StorageControllers']:
                             if 'Name' in sc[0]:
                                 controller_name = sc[0]['Name']
                             else:
                                 sc_id = sc[0].get('Id', '1')
-                                controller_name = 'Controller %s' % sc_id
+                                controller_name = f'Controller {sc_id}'
                     drive_results = []
                     if 'Drives' in data:
                         for device in data[u'Drives']:
@@ -588,11 +571,12 @@ class RedfishUtils(object):
                             response = self.get_request(disk_uri)
                             data = response['data']
 
-                            drive_result = {}
-                            for property in properties:
-                                if property in data:
-                                    if data[property] is not None:
-                                        drive_result[property] = data[property]
+                            drive_result = {
+                                property: data[property]
+                                for property in properties
+                                if property in data and data[property] is not None
+                            }
+
                             drive_results.append(drive_result)
                     drives = {'Controller': controller_name,
                               'Drives': drive_results}
@@ -607,8 +591,9 @@ class RedfishUtils(object):
             result['ret'] = True
             data = response['data']
 
-            for controller in data[u'Members']:
-                controller_list.append(controller[u'@odata.id'])
+            controller_list.extend(
+                controller[u'@odata.id'] for controller in data[u'Members']
+            )
 
             for c in controller_list:
                 uri = self.root_uri + c
@@ -620,13 +605,15 @@ class RedfishUtils(object):
                     controller_name = data['Name']
                 else:
                     sc_id = data.get('Id', '1')
-                    controller_name = 'Controller %s' % sc_id
+                    controller_name = f'Controller {sc_id}'
                 drive_results = []
                 for device in data[u'Devices']:
-                    drive_result = {}
-                    for property in properties:
-                        if property in device:
-                            drive_result[property] = device[property]
+                    drive_result = {
+                        property: device[property]
+                        for property in properties
+                        if property in device
+                    }
+
                     drive_results.append(drive_result)
                 drives = {'Controller': controller_name,
                           'Drives': drive_results}
@@ -638,7 +625,6 @@ class RedfishUtils(object):
         return self.aggregate_systems(self.get_disk_inventory)
 
     def get_volume_inventory(self, systems_uri):
-        result = {'entries': []}
         controller_list = []
         volume_list = []
         # Get these entries, but does not fail if not found
@@ -658,72 +644,70 @@ class RedfishUtils(object):
             return {'ret': False, 'msg': "SimpleStorage and Storage resource \
                      not found"}
 
-        if 'Storage' in data:
-            # Get a list of all storage controllers and build respective URIs
-            storage_uri = data[u'Storage'][u'@odata.id']
-            response = self.get_request(self.root_uri + storage_uri)
-            if response['ret'] is False:
-                return response
-            result['ret'] = True
-            data = response['data']
-
-            if data.get('Members'):
-                for controller in data[u'Members']:
-                    controller_list.append(controller[u'@odata.id'])
-                for c in controller_list:
-                    uri = self.root_uri + c
-                    response = self.get_request(uri)
-                    if response['ret'] is False:
-                        return response
-                    data = response['data']
-                    controller_name = 'Controller 1'
-                    if 'StorageControllers' in data:
-                        sc = data['StorageControllers']
-                        if sc:
-                            if 'Name' in sc[0]:
-                                controller_name = sc[0]['Name']
-                            else:
-                                sc_id = sc[0].get('Id', '1')
-                                controller_name = 'Controller %s' % sc_id
-                    volume_results = []
-                    if 'Volumes' in data:
-                        # Get a list of all volumes and build respective URIs
-                        volumes_uri = data[u'Volumes'][u'@odata.id']
-                        response = self.get_request(self.root_uri + volumes_uri)
-                        data = response['data']
-
-                        if data.get('Members'):
-                            for volume in data[u'Members']:
-                                volume_list.append(volume[u'@odata.id'])
-                            for v in volume_list:
-                                uri = self.root_uri + v
-                                response = self.get_request(uri)
-                                if response['ret'] is False:
-                                    return response
-                                data = response['data']
-
-                                volume_result = {}
-                                for property in properties:
-                                    if property in data:
-                                        if data[property] is not None:
-                                            volume_result[property] = data[property]
-
-                                # Get related Drives Id
-                                drive_id_list = []
-                                if 'Links' in data:
-                                    if 'Drives' in data[u'Links']:
-                                        for link in data[u'Links'][u'Drives']:
-                                            drive_id_link = link[u'@odata.id']
-                                            drive_id = drive_id_link.split("/")[-1]
-                                            drive_id_list.append({'Id': drive_id})
-                                        volume_result['Linked_drives'] = drive_id_list
-                                volume_results.append(volume_result)
-                    volumes = {'Controller': controller_name,
-                               'Volumes': volume_results}
-                    result["entries"].append(volumes)
-        else:
+        if 'Storage' not in data:
             return {'ret': False, 'msg': "Storage resource not found"}
 
+        # Get a list of all storage controllers and build respective URIs
+        storage_uri = data[u'Storage'][u'@odata.id']
+        response = self.get_request(self.root_uri + storage_uri)
+        if response['ret'] is False:
+            return response
+        result = {'entries': [], 'ret': True}
+        data = response['data']
+
+        if data.get('Members'):
+            controller_list.extend(
+                controller[u'@odata.id'] for controller in data[u'Members']
+            )
+
+            for c in controller_list:
+                uri = self.root_uri + c
+                response = self.get_request(uri)
+                if response['ret'] is False:
+                    return response
+                data = response['data']
+                controller_name = 'Controller 1'
+                if 'StorageControllers' in data:
+                    if sc := data['StorageControllers']:
+                        if 'Name' in sc[0]:
+                            controller_name = sc[0]['Name']
+                        else:
+                            sc_id = sc[0].get('Id', '1')
+                            controller_name = f'Controller {sc_id}'
+                volume_results = []
+                if 'Volumes' in data:
+                    # Get a list of all volumes and build respective URIs
+                    volumes_uri = data[u'Volumes'][u'@odata.id']
+                    response = self.get_request(self.root_uri + volumes_uri)
+                    data = response['data']
+
+                    if data.get('Members'):
+                        volume_list.extend(volume[u'@odata.id'] for volume in data[u'Members'])
+                        for v in volume_list:
+                            uri = self.root_uri + v
+                            response = self.get_request(uri)
+                            if response['ret'] is False:
+                                return response
+                            data = response['data']
+
+                            volume_result = {
+                                property: data[property]
+                                for property in properties
+                                if property in data and data[property] is not None
+                            }
+
+                            # Get related Drives Id
+                            drive_id_list = []
+                            if 'Links' in data and 'Drives' in data[u'Links']:
+                                for link in data[u'Links'][u'Drives']:
+                                    drive_id_link = link[u'@odata.id']
+                                    drive_id = drive_id_link.split("/")[-1]
+                                    drive_id_list.append({'Id': drive_id})
+                                volume_result['Linked_drives'] = drive_id_list
+                            volume_results.append(volume_result)
+                volumes = {'Controller': controller_name,
+                           'Volumes': volume_results}
+                result["entries"].append(volumes)
         return result
 
     def get_multi_volume_inventory(self):
@@ -742,17 +726,14 @@ class RedfishUtils(object):
         result['ret'] = True
         data = response['data']
         if key not in data:
-            return {'ret': False, 'msg': "Key %s not found" % key}
+            return {'ret': False, 'msg': f"Key {key} not found"}
 
-        if command in payloads.keys():
-            payload = {'IndicatorLED': payloads[command]}
-            response = self.patch_request(self.root_uri + self.chassis_uri, payload)
-            if response['ret'] is False:
-                return response
-        else:
+        if command not in payloads:
             return {'ret': False, 'msg': 'Invalid command'}
 
-        return result
+        payload = {'IndicatorLED': payloads[command]}
+        response = self.patch_request(self.root_uri + self.chassis_uri, payload)
+        return response if response['ret'] is False else result
 
     def _map_reset_type(self, reset_type, allowable_values):
         equiv_types = {
@@ -769,9 +750,7 @@ class RedfishUtils(object):
         if reset_type not in equiv_types:
             return reset_type
         mapped_type = equiv_types[reset_type]
-        if mapped_type in allowable_values:
-            return mapped_type
-        return reset_type
+        return mapped_type if mapped_type in allowable_values else reset_type
 
     def manage_system_power(self, command):
         return self.manage_power(command, self.systems_uri,

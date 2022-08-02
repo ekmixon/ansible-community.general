@@ -66,7 +66,7 @@ class LookupModule(LookupBase):
                 for param in params:
                     name, value = param.split('=')
                     if name not in paramvals:
-                        raise AnsibleAssertionError('%s not in paramvals' % name)
+                        raise AnsibleAssertionError(f'{name} not in paramvals')
                     paramvals[name] = value
 
             except (ValueError, AssertionError) as e:
@@ -75,17 +75,20 @@ class LookupModule(LookupBase):
 
             key = paramvals['key']
 
-            # Search also in the role/files directory and in the playbook directory
-            shelvefile = self.find_file_in_search_path(variables, 'files', paramvals['file'])
+            if not (
+                shelvefile := self.find_file_in_search_path(
+                    variables, 'files', paramvals['file']
+                )
+            ):
+                raise AnsibleError(
+                    f"Could not locate shelve file in lookup: {paramvals['file']}"
+                )
 
-            if shelvefile:
-                res = self.read_shelve(shelvefile, key)
-                if res is None:
-                    raise AnsibleError("Key %s not found in shelve file %s" % (key, shelvefile))
-                # Convert the value read to string
-                ret.append(to_text(res))
-                break
-            else:
-                raise AnsibleError("Could not locate shelve file in lookup: %s" % paramvals['file'])
 
+            res = self.read_shelve(shelvefile, key)
+            if res is None:
+                raise AnsibleError(f"Key {key} not found in shelve file {shelvefile}")
+            # Convert the value read to string
+            ret.append(to_text(res))
+            break
         return ret

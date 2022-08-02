@@ -81,22 +81,19 @@ class SumologicHTTPCollectorSource(object):
 
         if result._task_fields['args'].get('_ansible_version'):
             self.ansible_version = \
-                result._task_fields['args'].get('_ansible_version')
+                    result._task_fields['args'].get('_ansible_version')
 
-        if result._task._role:
-            ansible_role = str(result._task._role)
-        else:
-            ansible_role = None
-
+        ansible_role = str(result._task._role) if result._task._role else None
         if 'args' in result._task_fields:
             del result._task_fields['args']
 
-        data = {}
-        data['uuid'] = result._task._uuid
-        data['session'] = self.session
-        data['status'] = state
-        data['timestamp'] = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S '
-                                                       '+0000')
+        data = {
+            'uuid': result._task._uuid,
+            'session': self.session,
+            'status': state,
+            'timestamp': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S ' '+0000'),
+        }
+
         data['host'] = self.host
         data['ip_address'] = self.ip_address
         data['user'] = self.user

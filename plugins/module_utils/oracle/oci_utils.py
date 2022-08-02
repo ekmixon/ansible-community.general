@@ -287,24 +287,17 @@ def create_service_client(module, service_client_class):
             msg="Invalid OCI configuration. Exception: {0}".format(str(ic))
         )
 
-    # Create service client class with the signer
-    client = service_client_class(config, **kwargs)
-
-    return client
+    return service_client_class(config, **kwargs)
 
 
 def _is_instance_principal_auth(module):
-    # check if auth type is overridden via module params
-    instance_principal_auth = (
+    return (
         "auth_type" in module.params
         and module.params["auth_type"] == "instance_principal"
+    ) or (
+        "OCI_ANSIBLE_AUTH_TYPE" in os.environ
+        and os.environ["OCI_ANSIBLE_AUTH_TYPE"] == "instance_principal"
     )
-    if not instance_principal_auth:
-        instance_principal_auth = (
-            "OCI_ANSIBLE_AUTH_TYPE" in os.environ
-            and os.environ["OCI_ANSIBLE_AUTH_TYPE"] == "instance_principal"
-        )
-    return instance_principal_auth
 
 
 def _merge_auth_option(
@@ -318,12 +311,11 @@ def _merge_auth_option(
     _debug(
         "\t Ansible module option {0} = {1}".format(module_option_name, auth_attribute)
     )
-    if not auth_attribute:
-        if env_var_name in os.environ:
-            auth_attribute = os.environ[env_var_name]
-            _debug(
-                "\t Environment variable {0} = {1}".format(env_var_name, auth_attribute)
-            )
+    if not auth_attribute and env_var_name in os.environ:
+        auth_attribute = os.environ[env_var_name]
+        _debug(
+            "\t Environment variable {0} = {1}".format(env_var_name, auth_attribute)
+        )
 
     # An authentication attribute has been provided through an env-variable or an ansible
     # option and must override the corresponding attribute's value specified in the
@@ -353,18 +345,16 @@ def bucket_details_factory(bucket_details_type, module):
 
 
 def filter_resources(all_resources, filter_params):
-    if not filter_params:
-        return all_resources
-    filtered_resources = []
-    filtered_resources.extend(
+    return (
         [
             resource
             for resource in all_resources
             for key, value in filter_params.items()
             if getattr(resource, key) == value
         ]
+        if filter_params
+        else all_resources
     )
-    return filtered_resources
 
 
 def list_all_resources(target_fn, **kwargs):
@@ -524,9 +514,10 @@ def get_kwargs_update(
     primitive_params_update,
     sub_attributes_of_update_model=None,
 ):
-    kwargs_update = dict()
-    for param in primitive_params_update:
-        kwargs_update[param] = module.params[param]
+    kwargs_update = {
+        param: module.params[param] for param in primitive_params_update
+    }
+
     for param in kwargs_non_primitive_update:
         update_object = param()
         for key in update_object.attribute_map:
@@ -549,10 +540,7 @@ def is_dictionary_subset(sub, super_dict):
     :param super_dict: super dictionary, for example resources_attr_value.
     :return: True if sub is contained in super.
     """
-    for key in sub:
-        if sub[key] != super_dict[key]:
-            return False
-    return True
+    return all(sub[key] == super_dict[key] for key in sub)
 
 
 def are_lists_equal(s, t):
@@ -575,10 +563,11 @@ def are_lists_equal(s, t):
         # `service_id` is provided by the user in the update call.
         sorted_s = sort_list_of_dictionary(s)
         sorted_t = sort_list_of_dictionary(t)
-        for index, d in enumerate(sorted_s):
-            if not is_dictionary_subset(d, sorted_t[index]):
-                return False
-        return True
+        return all(
+            is_dictionary_subset(d, sorted_t[index])
+            for index, d in enumerate(sorted_s)
+        )
+
     else:
         # Handle lists of primitive types.
         try:
@@ -607,12 +596,10 @@ def get_attr_to_update(get_fn, kwargs_get, module, update_attributes):
         unequal_attr = type(resources_attr_value) != list and to_dict(
             resources_attr_value
         ) != to_dict(user_provided_attr_value)
-        if unequal_list_attr or unequal_attr:
-            # only update if the user has explicitly provided a value for this attribute
-            # otherwise, no update is necessary because the user hasn't expressed a particular
-            # value for that attribute
-            if module.params.get(attr, None):
-                attributes_to_update.append(attr)
+        if (unequal_list_attr or unequal_attr) and module.params.get(
+            attr, None
+        ):
+            attributes_to_update.append(attr)
 
     return attributes_to_update, resource
 
@@ -724,7 +711,7 @@ def check_and_create_resource(
     except ServiceError as ex:
         module.fail_json(msg=ex.message)
 
-    result = dict()
+    result = {}
 
     attributes_to_consider = _get_attributes_to_consider(
         exclude_attributes, model, module
@@ -803,27 +790,27 @@ def is_attr_assigned_default(default_attribute_values, attr, assigned_value):
     if not default_attribute_values:
         return False
 
-    if attr in default_attribute_values:
-        default_val_for_attr = default_attribute_values.get(attr, None)
-        if isinstance(default_val_for_attr, dict):
-            # When default value for a resource's attribute is empty dictionary, check if the corresponding value of the
-            # existing resource's attribute is also empty.
-            if not default_val_for_attr:
-                return not assigned_value
+    if attr not in default_attribute_values:
+        # module author has not provided a default value for attr
+        return True
+    default_val_for_attr = default_attribute_values.get(attr, None)
+    if isinstance(default_val_for_attr, dict):
+        # When default value for a resource's attribute is empty dictionary, check if the corresponding value of the
+        # existing resource's attribute is also empty.
+        if not default_val_for_attr:
+            return not assigned_value
             # only compare keys that are in default_attribute_values[attr]
             # this is to ensure forward compatibility when the API returns new keys that are not known during
             # the time when the module author provided default values for the attribute
-            keys = {}
-            for k, v in iteritems(assigned_value.items()):
-                if k in default_val_for_attr:
-                    keys[k] = v
+        keys = {
+            k: v
+            for k, v in iteritems(assigned_value.items())
+            if k in default_val_for_attr
+        }
 
-            return default_val_for_attr == keys
-        # non-dict, normal comparison
-        return default_val_for_attr == assigned_value
-    else:
-        # module author has not provided a default value for attr
-        return True
+        return default_val_for_attr == keys
+    # non-dict, normal comparison
+    return default_val_for_attr == assigned_value
 
 
 def create_resource(resource_type, create_fn, kwargs_create, module):
@@ -891,29 +878,24 @@ def does_existing_resource_match_user_inputs(
                         )
                     )
                     return False
-            else:
-                # If the user has not explicitly provided the value for attr and attr is in exclude_list, we can
-                # consider this as a 'pass'. For example, if an attribute 'display_name' is not specified by user and
-                # that attribute is in the 'exclude_list' according to the module author(Not User), then exclude
-                if (
-                    exclude_attributes.get(attr) is None
-                    and resources_value_for_attr is not None
+            elif (
+                exclude_attributes.get(attr) is None
+                and resources_value_for_attr is not None
+            ) and module.argument_spec.get(attr):
+                attribute_with_default_metadata = module.argument_spec.get(attr)
+                default_attribute_value = attribute_with_default_metadata.get(
+                    "default", None
+                )
+                if default_attribute_value is not None:
+                    if existing_resource[attr] != default_attribute_value:
+                        return False
+                # Check if attr has a value that is not default. For example, a custom `security_list_id`
+                # is assigned to the subnet's attribute `security_list_ids`. If the attribute is assigned a
+                # value that is not the default, then it must be considered a mismatch and false returned.
+                elif not is_attr_assigned_default(
+                    default_attribute_values, attr, existing_resource[attr]
                 ):
-                    if module.argument_spec.get(attr):
-                        attribute_with_default_metadata = module.argument_spec.get(attr)
-                        default_attribute_value = attribute_with_default_metadata.get(
-                            "default", None
-                        )
-                        if default_attribute_value is not None:
-                            if existing_resource[attr] != default_attribute_value:
-                                return False
-                        # Check if attr has a value that is not default. For example, a custom `security_list_id`
-                        # is assigned to the subnet's attribute `security_list_ids`. If the attribute is assigned a
-                        # value that is not the default, then it must be considered a mismatch and false returned.
-                        elif not is_attr_assigned_default(
-                            default_attribute_values, attr, existing_resource[attr]
-                        ):
-                            return False
+                    return False
 
         else:
             _debug(
@@ -937,9 +919,7 @@ def tuplize(d):
         if type(d[key]) == list:
             # Convert a value which is itself a list of dict to a list of tuples.
             if d[key] and type(d[key][0]) == dict:
-                sub_tuples = []
-                for sub_dict in d[key]:
-                    sub_tuples.append(tuplize(sub_dict))
+                sub_tuples = [tuplize(sub_dict) for sub_dict in d[key]]
                 # To handle comparing two None values, while creating a tuple for a {key: value}, make the first element
                 # in the tuple a boolean `True` if value is None so that attributes with None value are put at last
                 # in the sorted list.
@@ -955,8 +935,7 @@ def tuplize(d):
 
 
 def get_key_for_comparing_dict(d):
-    tuple_form_of_d = tuplize(d)
-    return tuple_form_of_d
+    return tuplize(d)
 
 
 def sort_dictionary(d):
@@ -1088,25 +1067,24 @@ def check_if_user_value_matches_resources_attr(
                     default_attribute_values,
                     res,
                 )
-            else:
-                if exclude_attributes.get(key) is None:
-                    if default_attribute_values.get(key) is not None:
-                        user_provided_value_for_attr = default_attribute_values.get(key)
-                        check_if_user_value_matches_resources_attr(
-                            key,
-                            resources_value_for_attr.get(key),
-                            user_provided_value_for_attr,
-                            exclude_attributes,
-                            default_attribute_values,
-                            res,
-                        )
-                    else:
-                        res[0] = is_attr_assigned_default(
-                            default_attribute_values,
-                            attribute_name,
-                            resources_value_for_attr.get(key),
-                        )
+            elif exclude_attributes.get(key) is None:
+                if default_attribute_values.get(key) is None:
+                    res[0] = is_attr_assigned_default(
+                        default_attribute_values,
+                        attribute_name,
+                        resources_value_for_attr.get(key),
+                    )
 
+                else:
+                    user_provided_value_for_attr = default_attribute_values.get(key)
+                    check_if_user_value_matches_resources_attr(
+                        key,
+                        resources_value_for_attr.get(key),
+                        user_provided_value_for_attr,
+                        exclude_attributes,
+                        default_attribute_values,
+                        res,
+                    )
     elif resources_value_for_attr != user_provided_value_for_attr:
         if (
             exclude_attributes.get(attribute_name) is None
@@ -1140,7 +1118,7 @@ def are_dicts_equal(
         )
 
     # If the existing resource has an empty dict, while the user has provided entries, dicts are not equal
-    if not existing_resource_dict and user_provided_dict:
+    if not existing_resource_dict:
         return False
 
     # check if all keys of an existing resource's dict attribute matches user-provided dict's entries
@@ -1159,31 +1137,28 @@ def are_dicts_equal(
                 )
                 return False
 
-        # If sub_attr not provided by user, check if the sub-attribute value of existing resource matches default value.
-        else:
-            if not should_dict_attr_be_excluded(option_name, sub_attr, exclude_list):
-                default_value_for_dict_attr = default_attribute_values.get(
-                    option_name, None
-                )
-                if default_value_for_dict_attr:
-                    # if a default value for the sub-attr was provided by the module author, fail if the existing
-                    # resource's value for the sub-attr is not the default
-                    if not is_attr_assigned_default(
-                        default_value_for_dict_attr,
-                        sub_attr,
-                        existing_resource_dict[sub_attr],
-                    ):
-                        return False
-                else:
-                    # No default value specified by module author for sub_attr
-                    _debug(
-                        "Consider as match: Existing resource's attr {0} sub-attr {1} value is {2}, while user did"
-                        "not provide a value for it. The module author also has not provided a default value for it"
-                        "or marked it for exclusion. So ignoring this attribute during matching and continuing with"
-                        "other checks".format(
-                            option_name, sub_attr, existing_resource_dict[sub_attr]
-                        )
+        elif not should_dict_attr_be_excluded(option_name, sub_attr, exclude_list):
+            if default_value_for_dict_attr := default_attribute_values.get(
+                option_name, None
+            ):
+                # if a default value for the sub-attr was provided by the module author, fail if the existing
+                # resource's value for the sub-attr is not the default
+                if not is_attr_assigned_default(
+                    default_value_for_dict_attr,
+                    sub_attr,
+                    existing_resource_dict[sub_attr],
+                ):
+                    return False
+            else:
+                # No default value specified by module author for sub_attr
+                _debug(
+                    "Consider as match: Existing resource's attr {0} sub-attr {1} value is {2}, while user did"
+                    "not provide a value for it. The module author also has not provided a default value for it"
+                    "or marked it for exclusion. So ignoring this attribute during matching and continuing with"
+                    "other checks".format(
+                        option_name, sub_attr, existing_resource_dict[sub_attr]
                     )
+                )
 
     return True
 
@@ -1192,12 +1167,12 @@ def should_dict_attr_be_excluded(map_option_name, option_key, exclude_list):
     """An entry for the Exclude list for excluding a map's key is specifed as a dict with the map option name as the
     key, and the value as a list of keys to be excluded within that map. For example, if the keys "k1" and "k2" of a map
     option named "m1" needs to be excluded, the exclude list must have an entry {'m1': ['k1','k2']} """
-    for exclude_item in exclude_list:
-        if isinstance(exclude_item, dict):
-            if map_option_name in exclude_item:
-                if option_key in exclude_item[map_option_name]:
-                    return True
-    return False
+    return any(
+        isinstance(exclude_item, dict)
+        and map_option_name in exclude_item
+        and option_key in exclude_item[map_option_name]
+        for exclude_item in exclude_list
+    )
 
 
 def create_and_wait(
@@ -1475,12 +1450,19 @@ def delete_and_wait(
     :return: A dictionary containing the resource & the "changed" status. e.g. {"vcn":{x:y}, "changed":True}
     """
 
-    states_set = set(["DETACHING", "DETACHED", "DELETING", "DELETED", "TERMINATING", "TERMINATED"])
+    states_set = {
+        "DETACHING",
+        "DETACHED",
+        "DELETING",
+        "DELETED",
+        "TERMINATING",
+        "TERMINATED",
+    }
+
     result = dict(changed=False)
-    result[resource_type] = dict()
+    result[resource_type] = {}
     try:
-        resource = to_dict(call_with_backoff(get_fn, **kwargs_get).data)
-        if resource:
+        if resource := to_dict(call_with_backoff(get_fn, **kwargs_get).data):
             if "lifecycle_state" not in resource or resource["lifecycle_state"] not in states_set:
                 response = call_with_backoff(delete_fn, **kwargs_delete)
                 if process_work_request:
@@ -1554,7 +1536,7 @@ def delete_and_wait(
                 )
         elif ex.status != 404:
             module.fail_json(msg=ex.message)
-        result[resource_type] = dict()
+        result[resource_type] = {}
     return result
 
 
@@ -1572,17 +1554,19 @@ def are_attrs_equal(current_resource, module, attributes):
         curr_value = getattr(current_resource, attr, None)
         user_provided_value = _get_user_provided_value(module, attribute_name=attr)
 
-        if user_provided_value is not None:
-            if curr_value != user_provided_value:
-                _debug(
-                    "are_attrs_equal - current resource's attribute "
-                    + attr
-                    + " value is "
-                    + str(curr_value)
-                    + " and this doesn't match user provided value of "
-                    + str(user_provided_value)
-                )
-                return False
+        if (
+            user_provided_value is not None
+            and curr_value != user_provided_value
+        ):
+            _debug(
+                "are_attrs_equal - current resource's attribute "
+                + attr
+                + " value is "
+                + str(curr_value)
+                + " and this doesn't match user provided value of "
+                + str(user_provided_value)
+            )
+            return False
     return True
 
 
@@ -1689,9 +1673,7 @@ def generic_hash(obj):
 
 
 def generic_eq(s, other):
-    if other is None:
-        return False
-    return s.__dict__ == other.__dict__
+    return False if other is None else s.__dict__ == other.__dict__
 
 
 def generate_subclass(parent_class):
@@ -1702,11 +1684,8 @@ def generate_subclass(parent_class):
         "__hash__": generic_hash,
         "__eq__": generic_eq,
     }
-    subclass_name = "GeneratedSub" + parent_class.__name__
-    generated_sub_class = type(
-        subclass_name, (parent_class,), dict_of_method_in_subclass
-    )
-    return generated_sub_class
+    subclass_name = f"GeneratedSub{parent_class.__name__}"
+    return type(subclass_name, (parent_class,), dict_of_method_in_subclass)
 
 
 def create_hashed_instance(class_type):
@@ -1717,12 +1696,10 @@ def create_hashed_instance(class_type):
 def get_hashed_object_list(class_type, object_with_values, attributes_class_type=None):
     if object_with_values is None:
         return None
-    hashed_class_instances = []
-    for object_with_value in object_with_values:
-        hashed_class_instances.append(
-            get_hashed_object(class_type, object_with_value, attributes_class_type)
-        )
-    return hashed_class_instances
+    return [
+        get_hashed_object(class_type, object_with_value, attributes_class_type)
+        for object_with_value in object_with_values
+    ]
 
 
 def get_hashed_object(
@@ -1845,11 +1822,8 @@ def get_attached_instance_info(
                     list_attachments_fn, **list_attachments_args
                 )
 
-            # Pass ServiceError due to authorization issue in accessing volume attachments of a compartment
             except ServiceError as ex:
-                if ex.status == 404:
-                    pass
-
+                pass
     else:
         volume_attachments = list_all_resources(
             list_attachments_fn, **list_attachments_args
@@ -1900,27 +1874,23 @@ def get_component_list_difference(
     if delete_components:
         if existing_components is None:
             return None, False
-        component_differences = set(existing_components).intersection(
+        if component_differences := set(existing_components).intersection(
             set(input_component_list)
-        )
-        if component_differences:
+        ):
             return list(set(existing_components) - component_differences), True
         else:
             return None, False
     if existing_components is None:
         return input_component_list, True
     if purge_components:
-        components_differences = set(input_component_list).symmetric_difference(
-            set(existing_components)
-        )
-
-        if components_differences:
+        if components_differences := set(
+            input_component_list
+        ).symmetric_difference(set(existing_components)):
             return input_component_list, True
 
-    components_differences = set(input_component_list).difference(
+    if components_differences := set(input_component_list).difference(
         set(existing_components)
-    )
-    if components_differences:
+    ):
         return list(components_differences) + existing_components, True
     return None, False
 

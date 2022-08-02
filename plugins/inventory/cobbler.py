@@ -144,10 +144,7 @@ class InventoryModule(BaseInventoryPlugin, Cacheable):
         if not self.use_cache or 'profiles' not in self._cache.get(self.cache_key, {}):
             c = self._get_connection()
             try:
-                if self.token is not None:
-                    data = c.get_profiles(self.token)
-                else:
-                    data = c.get_profiles()
+                data = c.get_profiles() if self.token is None else c.get_profiles(self.token)
             except (socket.gaierror, socket.error, xmlrpc_client.ProtocolError):
                 self._reload_cache()
             else:
@@ -160,10 +157,7 @@ class InventoryModule(BaseInventoryPlugin, Cacheable):
         if not self.use_cache or 'systems' not in self._cache.get(self.cache_key, {}):
             c = self._get_connection()
             try:
-                if self.token is not None:
-                    data = c.get_systems(self.token)
-                else:
-                    data = c.get_systems()
+                data = c.get_systems(self.token) if self.token is not None else c.get_systems()
             except (socket.gaierror, socket.error, xmlrpc_client.ProtocolError):
                 self._reload_cache()
             else:
@@ -173,7 +167,12 @@ class InventoryModule(BaseInventoryPlugin, Cacheable):
         return self._cache[self.cache_key]['systems']
 
     def _add_safe_group_name(self, group, child=None):
-        group_name = self.inventory.add_group(to_safe_group_name('%s%s' % (self.get_option('group_prefix'), group.lower().replace(" ", ""))))
+        group_name = self.inventory.add_group(
+            to_safe_group_name(
+                f"""{self.get_option('group_prefix')}{group.lower().replace(" ", "")}"""
+            )
+        )
+
         if child is not None:
             self.inventory.add_child(group_name, child)
         return group_name
@@ -209,8 +208,8 @@ class InventoryModule(BaseInventoryPlugin, Cacheable):
                 profile_elements = profile['name'].split('-')
                 i = 0
                 while i < len(profile_elements) - 1:
-                    profile_group = '-'.join(profile_elements[0:i + 1])
-                    profile_group_child = '-'.join(profile_elements[0:i + 2])
+                    profile_group = '-'.join(profile_elements[:i + 1])
+                    profile_group_child = '-'.join(profile_elements[:i + 2])
                     if profile_group in self.exclude_profiles:
                         self.display.vvvv('Excluding profile %s\n' % profile_group)
                         break
@@ -219,7 +218,7 @@ class InventoryModule(BaseInventoryPlugin, Cacheable):
                     child_group_name = self._add_safe_group_name(profile_group_child)
                     self.display.vvvv('Added profile child group %s to %s\n' % (child_group_name, group_name))
                     self.inventory.add_child(group_name, child_group_name)
-                    i = i + 1
+                    i += 1
 
         # Add default group for this inventory if specified
         self.group = to_safe_group_name(self.get_option('group'))
@@ -275,4 +274,4 @@ class InventoryModule(BaseInventoryPlugin, Cacheable):
                 try:
                     self.inventory.set_variable(hostname, 'cobbler', host)
                 except ValueError as e:
-                    self.display.warning("Could not set host info for %s: %s" % (hostname, to_text(e)))
+                    self.display.warning(f"Could not set host info for {hostname}: {to_text(e)}")

@@ -63,21 +63,19 @@ class ActionModule(ActionBase):
     def _check_delay(self, key, default):
         """Ensure that the value is positive or zero"""
         value = int(self._task.args.get(key, default))
-        if value < 0:
-            value = 0
+        value = max(value, 0)
         return value
 
     def _get_value_from_facts(self, variable_name, distribution, default_value):
         """Get dist+version specific args first, then distribution, then family, lastly use default"""
         attr = getattr(self, variable_name)
-        value = attr.get(
+        return attr.get(
             distribution['name'] + distribution['version'],
             attr.get(
                 distribution['name'],
-                attr.get(
-                    distribution['family'],
-                    getattr(self, default_value))))
-        return value
+                attr.get(distribution['family'], getattr(self, default_value)),
+            ),
+        )
 
     def get_shutdown_command_args(self, distribution):
         args = self._get_value_from_facts('SHUTDOWN_COMMAND_ARGS', distribution, 'DEFAULT_SHUTDOWN_COMMAND_ARGS')

@@ -97,16 +97,10 @@ def get_blade(module):
 def purefa_argument_spec():
     """Return standard base dictionary used for the argument_spec argument in AnsibleModule"""
 
-    return dict(
-        fa_url=dict(),
-        api_token=dict(no_log=True),
-    )
+    return dict(fa_url={}, api_token=dict(no_log=True))
 
 
 def purefb_argument_spec():
     """Return standard base dictionary used for the argument_spec argument in AnsibleModule"""
 
-    return dict(
-        fb_url=dict(),
-        api_token=dict(no_log=True),
-    )
+    return dict(fb_url={}, api_token=dict(no_log=True))

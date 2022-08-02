@@ -133,7 +133,7 @@ def position_base_dn():
 
 def ldap_dn_tree_parent(dn, count=1):
     dn_array = dn.split(',')
-    dn_array[0:count] = []
+    dn_array[:count] = []
     return ','.join(dn_array)
 
 
@@ -156,12 +156,10 @@ def ldap_search(filter, base=None, attr=None):
         result_type, result_data = uldap().lo.lo.result(msgid, all=0)
         if not result_data:
             break
-        if result_type is ldap_module().RES_SEARCH_RESULT:  # pragma: no cover
+        if result_type is ldap_module().RES_SEARCH_RESULT:
             break
-        else:
-            if result_type is ldap_module().RES_SEARCH_ENTRY:
-                for res in result_data:
-                    yield res
+        if result_type is ldap_module().RES_SEARCH_ENTRY:
+            yield from result_data
     uldap().lo.lo.abandon(msgid)
 
 
@@ -187,7 +185,7 @@ def module_by_name(module_name_):
         univention.admin.modules.init(uldap(), position_base_dn(), module)
         return module
 
-    return _singleton('module/%s' % module_name_, construct)
+    return _singleton(f'module/{module_name_}', construct)
 
 
 def get_umc_admin_objects():

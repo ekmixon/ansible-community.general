@@ -94,7 +94,4 @@ class LookupModule(LookupBase):
             raise AnsibleError("Not logged into lastpass: please run 'lpass login' first")
 
         field = kwargs.get('field', 'password')
-        values = []
-        for term in terms:
-            values.append(lp.get_field(term, field))
-        return values
+        return [lp.get_field(term, field) for term in terms]

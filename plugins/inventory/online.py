@@ -131,7 +131,7 @@ class InventoryModule(BaseInventoryPlugin):
         try:
             response = open_url(url, headers=self.headers)
         except Exception as e:
-            self.display.warning("An error happened while fetching: %s" % url)
+            self.display.warning(f"An error happened while fetching: {url}")
             return None
 
         try:
@@ -183,11 +183,14 @@ class InventoryModule(BaseInventoryPlugin):
 
     def _filter_host(self, host_infos, hostname_preferences):
 
-        for pref in hostname_preferences:
-            if self.extractors[pref](host_infos):
-                return self.extractors[pref](host_infos)
-
-        return None
+        return next(
+            (
+                self.extractors[pref](host_infos)
+                for pref in hostname_preferences
+                if self.extractors[pref](host_infos)
+            ),
+            None,
+        )
 
     def do_server_inventory(self, host_infos, hostname_preferences, group_preferences):
 
@@ -234,10 +237,11 @@ class InventoryModule(BaseInventoryPlugin):
         }
 
         self.headers = {
-            'Authorization': "Bearer %s" % token,
-            'User-Agent': "ansible %s Python %s" % (ansible_version, python_version.split(' ', 1)[0]),
-            'Content-type': 'application/json'
+            'Authorization': f"Bearer {token}",
+            'User-Agent': f"ansible {ansible_version} Python {python_version.split(' ', 1)[0]}",
+            'Content-type': 'application/json',
         }
+
 
         servers_url = urljoin(InventoryModule.API_ENDPOINT, "api/v1/server")
         servers_api_path = self._fetch_information(url=servers_url)

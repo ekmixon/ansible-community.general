@@ -134,9 +134,7 @@ class CallbackModule(CallbackBase):
     def body_blob(self, multiline, texttype):
         ''' Turn some text output in a well-indented block for sending in a mail body '''
         intro = 'with the following %s:\n\n' % texttype
-        blob = ''
-        for line in multiline.strip('\r\n').splitlines():
-            blob += '%s\n' % line
+        blob = ''.join('%s\n' % line for line in multiline.strip('\r\n').splitlines())
         return intro + self.indent(blob) + '\n'
 
     def mail_result(self, result, failtype):
@@ -158,7 +156,7 @@ class CallbackModule(CallbackBase):
         elif result._result.get('exception'):  # Unrelated exceptions are added to output :-/
             subject = self.subject_msg(result._result['exception'], failtype, -1)
         else:
-            subject = '%s: %s' % (failtype, result._task.name or result._task.action)
+            subject = f'{failtype}: {result._task.name or result._task.action}'
 
         # Make playbook name visible (e.g. in Outlook/Gmail condensed view)
         body = 'Playbook: %s\n' % os.path.basename(self.playbook._file_name)

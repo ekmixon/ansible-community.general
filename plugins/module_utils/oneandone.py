@@ -48,9 +48,7 @@ def get_datacenter(oneandone_conn, datacenter, full_object=False):
     """
     for _datacenter in oneandone_conn.list_datacenters():
         if datacenter in (_datacenter['id'], _datacenter['country_code']):
-            if full_object:
-                return _datacenter
-            return _datacenter['id']
+            return _datacenter if full_object else _datacenter['id']
 
 
 def get_fixed_instance_size(oneandone_conn, fixed_instance_size, full_object=False):
@@ -61,9 +59,7 @@ def get_fixed_instance_size(oneandone_conn, fixed_instance_size, full_object=Fal
     for _fixed_instance_size in oneandone_conn.fixed_server_flavors():
         if fixed_instance_size in (_fixed_instance_size['id'],
                                    _fixed_instance_size['name']):
-            if full_object:
-                return _fixed_instance_size
-            return _fixed_instance_size['id']
+            return _fixed_instance_size if full_object else _fixed_instance_size['id']
 
 
 def get_appliance(oneandone_conn, appliance, full_object=False):
@@ -73,9 +69,7 @@ def get_appliance(oneandone_conn, appliance, full_object=False):
     """
     for _appliance in oneandone_conn.list_appliances(q='IMAGE'):
         if appliance in (_appliance['id'], _appliance['name']):
-            if full_object:
-                return _appliance
-            return _appliance['id']
+            return _appliance if full_object else _appliance['id']
 
 
 def get_private_network(oneandone_conn, private_network, full_object=False):
@@ -86,9 +80,7 @@ def get_private_network(oneandone_conn, private_network, full_object=False):
     for _private_network in oneandone_conn.list_private_networks():
         if private_network in (_private_network['name'],
                                _private_network['id']):
-            if full_object:
-                return _private_network
-            return _private_network['id']
+            return _private_network if full_object else _private_network['id']
 
 
 def get_monitoring_policy(oneandone_conn, monitoring_policy, full_object=False):
@@ -99,9 +91,7 @@ def get_monitoring_policy(oneandone_conn, monitoring_policy, full_object=False):
     for _monitoring_policy in oneandone_conn.list_monitoring_policies():
         if monitoring_policy in (_monitoring_policy['name'],
                                  _monitoring_policy['id']):
-            if full_object:
-                return _monitoring_policy
-            return _monitoring_policy['id']
+            return _monitoring_policy if full_object else _monitoring_policy['id']
 
 
 def get_firewall_policy(oneandone_conn, firewall_policy, full_object=False):
@@ -112,9 +102,7 @@ def get_firewall_policy(oneandone_conn, firewall_policy, full_object=False):
     for _firewall_policy in oneandone_conn.list_firewall_policies():
         if firewall_policy in (_firewall_policy['name'],
                                _firewall_policy['id']):
-            if full_object:
-                return _firewall_policy
-            return _firewall_policy['id']
+            return _firewall_policy if full_object else _firewall_policy['id']
 
 
 def get_load_balancer(oneandone_conn, load_balancer, full_object=False):
@@ -125,9 +113,7 @@ def get_load_balancer(oneandone_conn, load_balancer, full_object=False):
     for _load_balancer in oneandone_conn.list_load_balancers():
         if load_balancer in (_load_balancer['name'],
                              _load_balancer['id']):
-            if full_object:
-                return _load_balancer
-            return _load_balancer['id']
+            return _load_balancer if full_object else _load_balancer['id']
 
 
 def get_server(oneandone_conn, instance, full_object=False):
@@ -137,9 +123,7 @@ def get_server(oneandone_conn, instance, full_object=False):
     """
     for server in oneandone_conn.list_servers(per_page=1000):
         if instance in (server['id'], server['name']):
-            if full_object:
-                return server
-            return server['id']
+            return server if full_object else server['id']
 
 
 def get_user(oneandone_conn, user, full_object=False):
@@ -149,9 +133,7 @@ def get_user(oneandone_conn, user, full_object=False):
     """
     for _user in oneandone_conn.list_users(per_page=1000):
         if user in (_user['id'], _user['name']):
-            if full_object:
-                return _user
-            return _user['id']
+            return _user if full_object else _user['id']
 
 
 def get_role(oneandone_conn, role, full_object=False):
@@ -162,9 +144,7 @@ def get_role(oneandone_conn, role, full_object=False):
     """
     for _role in oneandone_conn.list_roles(per_page=1000):
         if role in (_role['id'], _role['name']):
-            if full_object:
-                return _role
-            return _role['id']
+            return _role if full_object else _role['id']
 
 
 def get_vpn(oneandone_conn, vpn, full_object=False):
@@ -174,9 +154,7 @@ def get_vpn(oneandone_conn, vpn, full_object=False):
     """
     for _vpn in oneandone_conn.list_vpns(per_page=1000):
         if vpn in (_vpn['id'], _vpn['name']):
-            if full_object:
-                return _vpn
-            return _vpn['id']
+            return _vpn if full_object else _vpn['id']
 
 
 def get_public_ip(oneandone_conn, public_ip, full_object=False):
@@ -186,9 +164,7 @@ def get_public_ip(oneandone_conn, public_ip, full_object=False):
     """
     for _public_ip in oneandone_conn.list_public_ips(per_page=1000):
         if public_ip in (_public_ip['id'], _public_ip['ip']):
-            if full_object:
-                return _public_ip
-            return _public_ip['id']
+            return _public_ip if full_object else _public_ip['id']
 
 
 def wait_for_resource_creation_completion(oneandone_conn,
@@ -215,18 +191,18 @@ def wait_for_resource_creation_completion(oneandone_conn,
                 (resource_type != OneAndOneResources.server and resource_state.lower() == 'active')):
             return
         elif resource_state.lower() == 'failed':
-            raise Exception('%s creation failed for %s' % (resource_type, resource_id))
+            raise Exception(f'{resource_type} creation failed for {resource_id}')
         elif resource_state.lower() in ('active',
                                         'enabled',
                                         'deploying',
                                         'configuring'):
             continue
         else:
-            raise Exception(
-                'Unknown %s state %s' % (resource_type, resource_state))
+            raise Exception(f'Unknown {resource_type} state {resource_state}')
 
     raise Exception(
-        'Timed out waiting for %s completion for %s' % (resource_type, resource_id))
+        f'Timed out waiting for {resource_type} completion for {resource_id}'
+    )
 
 
 def wait_for_resource_deletion_completion(oneandone_conn,
@@ -252,7 +228,9 @@ def wait_for_resource_deletion_completion(oneandone_conn,
             _type = 'PRIVATENETWORK'
         else:
             raise Exception(
-                'Unsupported wait_for delete operation for %s resource' % resource_type)
+                f'Unsupported wait_for delete operation for {resource_type} resource'
+            )
+
 
         for log in logs:
             if (log['resource']['id'] == resource_id and
@@ -261,4 +239,5 @@ def wait_for_resource_deletion_completion(oneandone_conn,
                     log['status']['state'] == 'OK'):
                 return
     raise Exception(
-        'Timed out waiting for %s deletion for %s' % (resource_type, resource_id))
+        f'Timed out waiting for {resource_type} deletion for {resource_id}'
+    )

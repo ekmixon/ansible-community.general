@@ -69,11 +69,7 @@ COLORS = {
 def dict_diff(prv, nxt):
     """Return a dict of keys that differ with another config object."""
     keys = set(list(prv.keys()) + list(nxt.keys()))
-    result = {}
-    for k in keys:
-        if prv.get(k) != nxt.get(k):
-            result[k] = (prv.get(k), nxt.get(k))
-    return result
+    return {k: (prv.get(k), nxt.get(k)) for k in keys if prv.get(k) != nxt.get(k)}
 
 
 def colorize(msg, color):
@@ -120,9 +116,7 @@ class CallbackModule(CallbackBase):
 
     def _indent_text(self, text, indent_level):
         lines = text.splitlines()
-        result_lines = []
-        for l in lines:
-            result_lines.append("{0}{1}".format(' ' * indent_level, l))
+        result_lines = ["{0}{1}".format(' ' * indent_level, l) for l in lines]
         return '\n'.join(result_lines)
 
     def _print_diff(self, diff, indent_level):
@@ -145,9 +139,8 @@ class CallbackModule(CallbackBase):
             name = colorize(host_or_item.name, 'not_so_bold')
         else:
             indent_level = 4
-            if isinstance(host_or_item, dict):
-                if 'key' in host_or_item.keys():
-                    host_or_item = host_or_item['key']
+            if isinstance(host_or_item, dict) and 'key' in host_or_item.keys():
+                host_or_item = host_or_item['key']
             name = colorize(to_text(host_or_item), 'bold')
 
         if error:
@@ -253,26 +246,27 @@ class CallbackModule(CallbackBase):
 
     def v2_runner_on_skipped(self, result, **kwargs):
         """Run when a task is skipped."""
-        if self._display.verbosity > 1:
-            self._print_task()
-            self.last_skipped = False
+        if self._display.verbosity <= 1:
+            return
+        self._print_task()
+        self.last_skipped = False
 
-            line_length = 120
-            spaces = ' ' * (31 - len(result._host.name) - 4)
+        spaces = ' ' * (31 - len(result._host.name) - 4)
 
-            line = "  * {0}{1}- {2}".format(colorize(result._host.name, 'not_so_bold'),
-                                            spaces,
-                                            colorize("skipped", 'skipped'),)
+        line = "  * {0}{1}- {2}".format(colorize(result._host.name, 'not_so_bold'),
+                                        spaces,
+                                        colorize("skipped", 'skipped'),)
 
-            reason = result._result.get('skipped_reason', '') or \
+        reason = result._result.get('skipped_reason', '') or \
                 result._result.get('skip_reason', '')
-            if len(reason) < 50:
-                line += ' -- {0}'.format(reason)
-                print("{0} {1}---------".format(line, '-' * (line_length - len(line))))
-            else:
-                print("{0} {1}".format(line, '-' * (line_length - len(line))))
-                print(self._indent_text(reason, 8))
-                print(reason)
+        line_length = 120
+        if len(reason) < 50:
+            line += ' -- {0}'.format(reason)
+            print("{0} {1}---------".format(line, '-' * (line_length - len(line))))
+        else:
+            print("{0} {1}".format(line, '-' * (line_length - len(line))))
+            print(self._indent_text(reason, 8))
+            print(reason)
 
     def v2_runner_on_ok(self, result, **kwargs):
         self._print_task_result(result, error=False, **kwargs)

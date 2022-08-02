@@ -73,7 +73,7 @@ except ImportError:
 # Getting MAC Address of system:
 def get_mac():
     mac = "%012x" % getnode()
-    return ":".join(map(lambda index: mac[index:index + 2], range(int(len(mac) / 2))))
+    return ":".join(map(lambda index: mac[index:index + 2], range(len(mac) // 2)))
 
 
 # Getting hostname of system:
@@ -186,9 +186,7 @@ class CallbackModule(CallbackBase):
         self.playbook_name = playbook._file_name
 
     def v2_playbook_on_stats(self, stats):
-        result = dict()
-        for host in stats.processed.keys():
-            result[host] = stats.summarize(host)
+        result = {host: stats.summarize(host) for host in stats.processed.keys()}
         self.sendLog(self.conf_hostname, 'STATS', {'info': self.sanitizeJSON(result)})
 
     def runner_on_failed(self, host, res, ignore_errors=False):

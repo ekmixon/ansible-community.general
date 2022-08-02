@@ -155,7 +155,7 @@ def file_props(root, path):
     try:
         st = os.lstat(abspath)
     except OSError as e:
-        display.warning('filetree: Error using stat() on path %s (%s)' % (abspath, e))
+        display.warning(f'filetree: Error using stat() on path {abspath} ({e})')
         return None
 
     ret = dict(root=root, path=path)
@@ -169,7 +169,7 @@ def file_props(root, path):
         ret['state'] = 'file'
         ret['src'] = abspath
     else:
-        display.warning('filetree: Error file type of %s is not supported' % abspath)
+        display.warning(f'filetree: Error file type of {abspath} is not supported')
         return None
 
     ret['uid'] = st.st_uid

@@ -110,7 +110,7 @@ class Etcd:
     def __init__(self, url, version, validate_certs):
         self.url = url
         self.version = version
-        self.baseurl = '%s/%s/keys' % (self.url, self.version)
+        self.baseurl = f'{self.url}/{self.version}/keys'
         self.validate_certs = validate_certs
 
     def _parse_node(self, node):
@@ -131,7 +131,7 @@ class Etcd:
         return path
 
     def get(self, key):
-        url = "%s/%s?recursive=true" % (self.baseurl, key)
+        url = f"{self.baseurl}/{key}?recursive=true"
         data = None
         value = {}
         try:
@@ -147,10 +147,9 @@ class Etcd:
                 # When ETCD are working with just v1
                 if 'value' in item:
                     value = item['value']
-            else:
-                if 'node' in item:
-                    # When a usual result from ETCD
-                    value = self._parse_node(item['node'])
+            elif 'node' in item:
+                # When a usual result from ETCD
+                value = self._parse_node(item['node'])
 
             if 'errorCode' in item:
                 # Here return an error when an unknown entry responds

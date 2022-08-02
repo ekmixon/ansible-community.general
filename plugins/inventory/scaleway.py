@@ -115,7 +115,7 @@ def _fetch_information(token, url):
                                 headers={'X-Auth-Token': token,
                                          'Content-type': 'application/json'})
         except Exception as e:
-            raise AnsibleError("Error while fetching %s: %s" % (url, to_native(e)))
+            raise AnsibleError(f"Error while fetching {url}: {to_native(e)}")
         try:
             raw_json = json.loads(to_text(response.read()))
         except ValueError:
@@ -240,17 +240,18 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
 
         matching_tags = set(server_tags).intersection(tags)
 
-        if not matching_tags:
-            return set()
-        return matching_tags.union((server_zone,))
+        return matching_tags.union((server_zone,)) if matching_tags else set()
 
     def _filter_host(self, host_infos, hostname_preferences):
 
-        for pref in hostname_preferences:
-            if extractors[pref](host_infos):
-                return extractors[pref](host_infos)
-
-        return None
+        return next(
+            (
+                extractors[pref](host_infos)
+                for pref in hostname_preferences
+                if extractors[pref](host_infos)
+            ),
+            None,
+        )
 
     def do_zone_inventory(self, zone, token, tags, hostname_preferences):
         self.inventory.add_group(zone)

@@ -164,31 +164,31 @@ class LookupModule(LookupBase):
                 server_parameters["api_path_uri"],
                 server_parameters["token_path_uri"],
             )
-        else:
             # The Password Authorizer and Domain Password Authorizer
             # became available in v1.0.0 and beyond.
             # Import only if sdk_version requires it.
             # from thycotic.secrets.server import PasswordGrantAuthorizer
 
-            if server_parameters["domain"]:
-                authorizer = DomainPasswordGrantAuthorizer(
-                    server_parameters["base_url"],
-                    server_parameters["username"],
-                    server_parameters["domain"],
-                    server_parameters["password"],
-                    server_parameters["token_path_uri"],
-                )
-            else:
-                authorizer = PasswordGrantAuthorizer(
-                    server_parameters["base_url"],
-                    server_parameters["username"],
-                    server_parameters["password"],
-                    server_parameters["token_path_uri"],
-                )
-
-            return SecretServer(
-                server_parameters["base_url"], authorizer, server_parameters["api_path_uri"]
+        authorizer = (
+            DomainPasswordGrantAuthorizer(
+                server_parameters["base_url"],
+                server_parameters["username"],
+                server_parameters["domain"],
+                server_parameters["password"],
+                server_parameters["token_path_uri"],
             )
+            if server_parameters["domain"]
+            else PasswordGrantAuthorizer(
+                server_parameters["base_url"],
+                server_parameters["username"],
+                server_parameters["password"],
+                server_parameters["token_path_uri"],
+            )
+        )
+
+        return SecretServer(
+            server_parameters["base_url"], authorizer, server_parameters["api_path_uri"]
+        )
 
     def run(self, terms, variables, **kwargs):
         if sdk_is_missing:
@@ -209,7 +209,7 @@ class LookupModule(LookupBase):
         result = []
 
         for term in terms:
-            display.debug("tss_lookup term: %s" % term)
+            display.debug(f"tss_lookup term: {term}")
             try:
                 id = int(term)
                 display.vvv(u"Secret Server lookup of Secret with ID %d" % id)
@@ -217,5 +217,5 @@ class LookupModule(LookupBase):
             except ValueError:
                 raise AnsibleOptionsError("Secret ID must be an integer")
             except SecretServerError as error:
-                raise AnsibleError("Secret Server lookup failure: %s" % error.message)
+                raise AnsibleError(f"Secret Server lookup failure: {error.message}")
         return result

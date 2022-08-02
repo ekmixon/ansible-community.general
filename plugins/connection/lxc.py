@@ -75,17 +75,14 @@ class Connection(ConnectionBase):
         self._display.vvv("THIS IS A LOCAL LXC DIR", host=self.container_name)
         self.container = _lxc.Container(self.container_name)
         if self.container.state == "STOPPED":
-            raise errors.AnsibleError("%s is not running" % self.container_name)
+            raise errors.AnsibleError(f"{self.container_name} is not running")
 
     @staticmethod
     def _communicate(pid, in_data, stdin, stdout, stderr):
         buf = {stdout: [], stderr: []}
         read_fds = [stdout, stderr]
-        if in_data:
-            write_fds = [stdin]
-        else:
-            write_fds = []
-        while len(read_fds) > 0 or len(write_fds) > 0:
+        write_fds = [stdin] if in_data else []
+        while read_fds or write_fds:
             try:
                 ready_reads, ready_writes, dummy = select.select(read_fds, write_fds, [])
             except select.error as e:
@@ -137,10 +134,10 @@ class Connection(ConnectionBase):
                 read_stdin, write_stdin = os.pipe()
                 kwargs['stdin'] = self._set_nonblocking(read_stdin)
 
-            self._display.vvv("EXEC %s" % (local_cmd), host=self.container_name)
+            self._display.vvv(f"EXEC {local_cmd}", host=self.container_name)
             pid = self.container.attach(_lxc.attach_run_command, local_cmd, **kwargs)
             if pid == -1:
-                msg = "failed to attach to container %s" % self.container_name
+                msg = f"failed to attach to container {self.container_name}"
                 raise errors.AnsibleError(msg)
 
             write_stdout = os.close(write_stdout)
@@ -167,27 +164,28 @@ class Connection(ConnectionBase):
     def put_file(self, in_path, out_path):
         ''' transfer a file from local to lxc '''
         super(Connection, self).put_file(in_path, out_path)
-        self._display.vvv("PUT %s TO %s" % (in_path, out_path), host=self.container_name)
+        self._display.vvv(f"PUT {in_path} TO {out_path}", host=self.container_name)
         in_path = to_bytes(in_path, errors='surrogate_or_strict')
         out_path = to_bytes(out_path, errors='surrogate_or_strict')
 
         if not os.path.exists(in_path):
-            msg = "file or module does not exist: %s" % in_path
+            msg = f"file or module does not exist: {in_path}"
             raise errors.AnsibleFileNotFound(msg)
         try:
             src_file = open(in_path, "rb")
         except IOError:
             traceback.print_exc()
-            raise errors.AnsibleError("failed to open input file to %s" % in_path)
+            raise errors.AnsibleError(f"failed to open input file to {in_path}")
         try:
             def write_file(args):
                 with open(out_path, 'wb+') as dst_file:
                     shutil.copyfileobj(src_file, dst_file)
+
             try:
                 self.container.attach_wait(write_file, None)
             except IOError:
                 traceback.print_exc()
-                msg = "failed to transfer file to %s" % out_path
+                msg = f"failed to transfer file to {out_path}"
                 raise errors.AnsibleError(msg)
         finally:
             src_file.close()
@@ -195,7 +193,7 @@ class Connection(ConnectionBase):
     def fetch_file(self, in_path, out_path):
         ''' fetch a file from lxc to local '''
         super(Connection, self).fetch_file(in_path, out_path)
-        self._display.vvv("FETCH %s TO %s" % (in_path, out_path), host=self.container_name)
+        self._display.vvv(f"FETCH {in_path} TO {out_path}", host=self.container_name)
         in_path = to_bytes(in_path, errors='surrogate_or_strict')
         out_path = to_bytes(out_path, errors='surrogate_or_strict')
 
@@ -203,7 +201,7 @@ class Connection(ConnectionBase):
             dst_file = open(out_path, "wb")
         except IOError:
             traceback.print_exc()
-            msg = "failed to open output file %s" % out_path
+            msg = f"failed to open output file {out_path}"
             raise errors.AnsibleError(msg)
         try:
             def write_file(args):
@@ -214,11 +212,12 @@ class Connection(ConnectionBase):
                     # this is needed in the lxc child process
                     # to flush internal python buffers
                     dst_file.close()
+
             try:
                 self.container.attach_wait(write_file, None)
             except IOError:
                 traceback.print_exc()
-                msg = "failed to transfer file from %s to %s" % (in_path, out_path)
+                msg = f"failed to transfer file from {in_path} to {out_path}"
                 raise errors.AnsibleError(msg)
         finally:
             dst_file.close()

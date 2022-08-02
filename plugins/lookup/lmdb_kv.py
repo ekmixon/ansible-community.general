@@ -99,9 +99,7 @@ class LookupModule(LookupBase):
             with env.begin() as txn:
                 cursor = txn.cursor()
                 cursor.first()
-                for key, value in cursor:
-                    ret.append((to_text(key), to_native(value)))
-
+                ret.extend((to_text(key), to_native(value)) for key, value in cursor)
         else:
             for term in terms:
                 with env.begin() as txn:
@@ -110,8 +108,7 @@ class LookupModule(LookupBase):
                         prefix = term[:-1]  # strip asterisk
                         cursor.set_range(to_text(term).encode())
                         while cursor.key().startswith(to_text(prefix).encode()):
-                            for key, value in cursor:
-                                ret.append((to_text(key), to_native(value)))
+                            ret.extend((to_text(key), to_native(value)) for key, value in cursor)
                             cursor.next()
                     else:
                         value = txn.get(to_text(term).encode())

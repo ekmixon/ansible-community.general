@@ -203,7 +203,7 @@ class LookupModule(LookupBase):
                 for param in params[1:]:
                     name, value = param.split('=', 1)
                     if name not in self.paramvals:
-                        raise AnsibleAssertionError('%s not in paramvals' % name)
+                        raise AnsibleAssertionError(f'{name} not in paramvals')
                     self.paramvals[name] = value
             except (ValueError, AssertionError) as e:
                 raise AnsibleError(e)
@@ -261,18 +261,14 @@ class LookupModule(LookupBase):
                     if ':' in line:
                         name, value = line.split(':', 1)
                         self.passdict[name.strip()] = value.strip()
-        except (subprocess.CalledProcessError) as e:
-            if e.returncode != 0 and 'not in the password store' in e.output:
-                # if pass returns 1 and return string contains 'is not in the password store.'
-                # We need to determine if this is valid or Error.
-                if self.paramvals['missing'] == 'error':
-                    raise AnsibleError('passwordstore: passname {0} not found and missing=error is set'.format(self.passname))
-                else:
-                    if self.paramvals['missing'] == 'warn':
-                        display.warning('passwordstore: passname {0} not found'.format(self.passname))
-                    return False
-            else:
+        except subprocess.CalledProcessError as e:
+            if e.returncode == 0 or 'not in the password store' not in e.output:
                 raise AnsibleError(e)
+            if self.paramvals['missing'] == 'error':
+                raise AnsibleError('passwordstore: passname {0} not found and missing=error is set'.format(self.passname))
+            if self.paramvals['missing'] == 'warn':
+                display.warning('passwordstore: passname {0} not found'.format(self.passname))
+            return False
         return True
 
     def get_newpass(self):
@@ -281,11 +277,9 @@ class LookupModule(LookupBase):
         else:
             chars = C.DEFAULT_PASSWORD_CHARS
 
-        if self.paramvals['userpass']:
-            newpass = self.paramvals['userpass']
-        else:
-            newpass = random_password(length=self.paramvals['length'], chars=chars)
-        return newpass
+        return self.paramvals['userpass'] or random_password(
+            length=self.paramvals['length'], chars=chars
+        )
 
     def update_password(self):
         # generate new password, insert old lines from current result and return new password
@@ -319,11 +313,10 @@ class LookupModule(LookupBase):
             return os.linesep.join(self.passoutput)
         if self.paramvals['subkey'] == 'password':
             return self.password
+        if self.paramvals['subkey'] in self.passdict:
+            return self.passdict[self.paramvals['subkey']]
         else:
-            if self.paramvals['subkey'] in self.passdict:
-                return self.passdict[self.paramvals['subkey']]
-            else:
-                return None
+            return None
 
     def run(self, terms, variables, **kwargs):
         result = []
@@ -347,10 +340,9 @@ class LookupModule(LookupBase):
                     result.append(self.update_password())
                 else:
                     result.append(self.get_passresult())
-            else:                     # password does not exist
-                if self.paramvals['missing'] == 'create':
-                    result.append(self.generate_password())
-                else:
-                    result.append(None)
+            elif self.paramvals['missing'] == 'create':
+                result.append(self.generate_password())
+            else:
+                result.append(None)
 
         return result

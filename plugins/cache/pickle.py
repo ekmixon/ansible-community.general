@@ -57,10 +57,7 @@ class CacheModule(BaseFileCacheModule):
     def _load(self, filepath):
         # Pickle is a binary format
         with open(filepath, 'rb') as f:
-            if PY3:
-                return pickle.load(f, encoding='bytes')
-            else:
-                return pickle.load(f)
+            return pickle.load(f, encoding='bytes') if PY3 else pickle.load(f)
 
     def _dump(self, value, filepath):
         with open(filepath, 'wb') as f:

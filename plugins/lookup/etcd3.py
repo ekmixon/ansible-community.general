@@ -168,7 +168,7 @@ def etcd3_client(client_params):
         etcd = etcd3.client(**client_params)
         etcd.status()
     except Exception as exp:
-        raise AnsibleLookupError('Cannot connect to etcd cluster: %s' % (to_native(exp)))
+        raise AnsibleLookupError(f'Cannot connect to etcd cluster: {to_native(exp)}')
     return etcd
 
 
@@ -185,17 +185,13 @@ class LookupModule(LookupBase):
         # create the etcd3 connection parameters dict to pass to etcd3 class
         client_params = {}
 
-        # etcd3 class expects host and port as connection parameters, so endpoints
-        # must be mangled a bit to fit in this scheme.
-        # so here we use a regex to extract server and port
-        match = re.compile(
+        if match := re.compile(
             r'^(https?://)?(?P<host>(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})|([-_\d\w\.]+))(:(?P<port>\d{1,5}))?/?$'
-        ).match(self.get_option('endpoints'))
-        if match:
-            if match.group('host'):
-                client_params['host'] = match.group('host')
-            if match.group('port'):
-                client_params['port'] = match.group('port')
+        ).match(self.get_option('endpoints')):
+            if match['host']:
+                client_params['host'] = match['host']
+            if match['port']:
+                client_params['port'] = match['port']
 
         for opt in etcd3_cnx_opts:
             if self.get_option(opt):
@@ -204,7 +200,7 @@ class LookupModule(LookupBase):
         cnx_log = dict(client_params)
         if 'password' in cnx_log:
             cnx_log['password'] = '<redacted>'
-        display.verbose("etcd3 connection parameters: %s" % cnx_log)
+        display.verbose(f"etcd3 connection parameters: {cnx_log}")
 
         # connect to etcd3 server
         etcd = etcd3_client(client_params)
@@ -214,16 +210,19 @@ class LookupModule(LookupBase):
         for term in terms:
             if self.get_option('prefix'):
                 try:
-                    for val, meta in etcd.get_prefix(term):
-                        if val and meta:
-                            ret.append({'key': to_native(meta.key), 'value': to_native(val)})
+                    ret.extend(
+                        {'key': to_native(meta.key), 'value': to_native(val)}
+                        for val, meta in etcd.get_prefix(term)
+                        if val and meta
+                    )
+
                 except Exception as exp:
-                    display.warning('Caught except during etcd3.get_prefix: %s' % (to_native(exp)))
+                    display.warning(f'Caught except during etcd3.get_prefix: {to_native(exp)}')
             else:
                 try:
                     val, meta = etcd.get(term)
                     if val and meta:
                         ret.append({'key': to_native(meta.key), 'value': to_native(val)})
                 except Exception as exp:
-                    display.warning('Caught except during etcd3.get: %s' % (to_native(exp)))
+                    display.warning(f'Caught except during etcd3.get: {to_native(exp)}')
         return ret

@@ -20,7 +20,7 @@ def groupby_as_dict(sequence, attribute):
     if not isinstance(sequence, Sequence):
         raise AnsibleFilterError('Input is not a sequence')
 
-    result = dict()
+    result = {}
     for list_index, element in enumerate(sequence):
         if not isinstance(element, Mapping):
             raise AnsibleFilterError('Sequence element #{0} is not a mapping'.format(list_index))

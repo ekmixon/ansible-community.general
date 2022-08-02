@@ -90,7 +90,7 @@ class OpenNebulaModule:
         else:
             self.fail("Either api_password or the environment vairable ONE_PASSWORD must be provided")
 
-        session = "%s:%s" % (username, password)
+        session = f"{username}:{password}"
 
         if not self.module.params.get("validate_certs") and "PYTHONHTTPSVERIFY" not in environ:
             return OneServer(url, session=session, context=no_ssl_validation_context)
@@ -170,10 +170,7 @@ class OpenNebulaModule:
 
         '''
         hosts = self.one.hostpool.info()
-        for h in hosts.HOST:
-            if h.NAME == name:
-                return h
-        return None
+        return next((h for h in hosts.HOST if h.NAME == name), None)
 
     def get_cluster_by_name(self, name):
         """
@@ -185,10 +182,7 @@ class OpenNebulaModule:
         """
 
         clusters = self.one.clusterpool.info()
-        for c in clusters.CLUSTER:
-            if c.NAME == name:
-                return c
-        return None
+        return next((c for c in clusters.CLUSTER if c.NAME == name), None)
 
     def get_template_by_name(self, name):
         '''
@@ -200,10 +194,7 @@ class OpenNebulaModule:
 
         '''
         templates = self.one.templatepool.info()
-        for t in templates.TEMPLATE:
-            if t.NAME == name:
-                return t
-        return None
+        return next((t for t in templates.TEMPLATE if t.NAME == name), None)
 
     def cast_template(self, template):
         """
@@ -247,13 +238,13 @@ class OpenNebulaModule:
             return False
 
         self.cast_template(desired)
-        intersection = dict()
+        intersection = {}
         for dkey in desired.keys():
             if dkey in current.keys():
                 intersection[dkey] = current[dkey]
             else:
                 return True
-        return not (desired == intersection)
+        return desired != intersection
 
     def wait_for_state(self, element_name, state, state_name, target_states,
                        invalid_states=None, transition_states=None,
@@ -278,11 +269,13 @@ class OpenNebulaModule:
             current_state = state()
 
             if current_state in invalid_states:
-                self.fail('invalid %s state %s' % (element_name, state_name(current_state)))
+                self.fail(f'invalid {element_name} state {state_name(current_state)}')
 
-            if transition_states:
-                if current_state not in transition_states:
-                    self.fail('invalid %s transition state %s' % (element_name, state_name(current_state)))
+            if transition_states and current_state not in transition_states:
+                self.fail(
+                    f'invalid {element_name} transition state {state_name(current_state)}'
+                )
+
 
             if current_state in target_states:
                 return True
@@ -300,7 +293,7 @@ class OpenNebulaModule:
         try:
             self.run(self.one, self.module, self.result)
         except OneException as e:
-            self.fail(msg="OpenNebula Exception: %s" % e)
+            self.fail(msg=f"OpenNebula Exception: {e}")
 
     def run(self, one, module, result):
         """

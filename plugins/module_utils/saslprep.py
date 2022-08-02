@@ -34,7 +34,7 @@ from ansible.module_utils.six import text_type
 
 
 def is_unicode_str(string):
-    return True if isinstance(string, text_type) else False
+    return isinstance(string, text_type)
 
 
 def mapping_profile(string):
@@ -111,13 +111,13 @@ def prohibited_output_profile(string):
             raise ValueError('%s: prohibited non-ASCII space characters '
                              'that cannot be replaced (C.1.2).' % RFC)
         if in_table_c21_c22(c):
-            raise ValueError('%s: prohibited control characters (C.2.1).' % RFC)
+            raise ValueError(f'{RFC}: prohibited control characters (C.2.1).')
         if in_table_c3(c):
-            raise ValueError('%s: prohibited private Use characters (C.3).' % RFC)
+            raise ValueError(f'{RFC}: prohibited private Use characters (C.3).')
         if in_table_c4(c):
-            raise ValueError('%s: prohibited non-character code points (C.4).' % RFC)
+            raise ValueError(f'{RFC}: prohibited non-character code points (C.4).')
         if in_table_c5(c):
-            raise ValueError('%s: prohibited surrogate code points (C.5).' % RFC)
+            raise ValueError(f'{RFC}: prohibited surrogate code points (C.5).')
         if in_table_c6(c):
             raise ValueError('%s: prohibited inappropriate for plain text '
                              'characters (C.6).' % RFC)
@@ -128,15 +128,15 @@ def prohibited_output_profile(string):
             raise ValueError('%s: prohibited change display properties / '
                              'deprecated characters (C.8).' % RFC)
         if in_table_c9(c):
-            raise ValueError('%s: prohibited tagging characters (C.9).' % RFC)
+            raise ValueError(f'{RFC}: prohibited tagging characters (C.9).')
 
         # RFC4013, 2.4. Bidirectional Characters:
         if is_prohibited_bidi_ch(c):
-            raise ValueError('%s: prohibited bidi characters (%s).' % (RFC, bidi_table))
+            raise ValueError(f'{RFC}: prohibited bidi characters ({bidi_table}).')
 
         # RFC4013, 2.5. Unassigned Code Points:
         if in_table_a1(c):
-            raise ValueError('%s: prohibited unassigned code points (A.1).' % RFC)
+            raise ValueError(f'{RFC}: prohibited unassigned code points (A.1).')
 
 
 def saslprep(string):
@@ -159,7 +159,7 @@ def saslprep(string):
     # Validate the string is a Unicode string
     # (text_type is the string type if PY3 and unicode otherwise):
     if not is_unicode_str(string):
-        raise TypeError('input must be of type %s, not %s' % (text_type, type(string)))
+        raise TypeError(f'input must be of type {text_type}, not {type(string)}')
 
     # RFC4013: 2.1. Mapping.
     string = mapping_profile(string)

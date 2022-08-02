@@ -76,7 +76,7 @@ class CallbackModule(CallbackBase):
         subprocess.call(cmd)
 
     def runner_on_failed(self, host, res, ignore_errors=False):
-        self.say("Failure on host %s" % host, self.FAILED_VOICE)
+        self.say(f"Failure on host {host}", self.FAILED_VOICE)
 
     def runner_on_ok(self, host, res):
         self.say("pew", self.LASER_VOICE)
@@ -85,13 +85,13 @@ class CallbackModule(CallbackBase):
         self.say("pew", self.LASER_VOICE)
 
     def runner_on_unreachable(self, host, res):
-        self.say("Failure on host %s" % host, self.FAILED_VOICE)
+        self.say(f"Failure on host {host}", self.FAILED_VOICE)
 
     def runner_on_async_ok(self, host, res, jid):
         self.say("pew", self.LASER_VOICE)
 
     def runner_on_async_failed(self, host, res, jid):
-        self.say("Failure on host %s" % host, self.FAILED_VOICE)
+        self.say(f"Failure on host {host}", self.FAILED_VOICE)
 
     def playbook_on_start(self):
         self.say("Running Playbook", self.REGULAR_VOICE)
@@ -101,15 +101,15 @@ class CallbackModule(CallbackBase):
 
     def playbook_on_task_start(self, name, is_conditional):
         if not is_conditional:
-            self.say("Starting task: %s" % name, self.REGULAR_VOICE)
+            self.say(f"Starting task: {name}", self.REGULAR_VOICE)
         else:
-            self.say("Notifying task: %s" % name, self.REGULAR_VOICE)
+            self.say(f"Notifying task: {name}", self.REGULAR_VOICE)
 
     def playbook_on_setup(self):
         self.say("Gathering facts", self.REGULAR_VOICE)
 
     def playbook_on_play_start(self, name):
-        self.say("Starting play: %s" % name, self.HAPPY_VOICE)
+        self.say(f"Starting play: {name}", self.HAPPY_VOICE)
 
     def playbook_on_stats(self, stats):
         self.say("Play complete", self.HAPPY_VOICE)

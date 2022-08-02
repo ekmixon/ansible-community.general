@@ -72,9 +72,7 @@ ANSIBLE_HIERA_BIN = os.getenv('ANSIBLE_HIERA_BIN', '/usr/bin/hiera')
 
 class Hiera(object):
     def get(self, hiera_key):
-        pargs = [ANSIBLE_HIERA_BIN]
-        pargs.extend(['-c', ANSIBLE_HIERA_CFG])
-
+        pargs = [ANSIBLE_HIERA_BIN, '-c', ANSIBLE_HIERA_CFG]
         pargs.extend(hiera_key)
 
         rc, output, err = run_cmd("{0} -c {1} {2}".format(
@@ -86,5 +84,4 @@ class Hiera(object):
 class LookupModule(LookupBase):
     def run(self, terms, variables=''):
         hiera = Hiera()
-        ret = [hiera.get(terms)]
-        return ret
+        return [hiera.get(terms)]

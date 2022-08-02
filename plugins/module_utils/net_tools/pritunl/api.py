@@ -65,7 +65,7 @@ def _delete_pritunl_organization(
         api_token=api_token,
         api_secret=api_secret,
         method="DELETE",
-        path="/organization/%s" % (organization_id),
+        path=f"/organization/{organization_id}",
         validate_certs=validate_certs,
     )
 
@@ -93,7 +93,7 @@ def _get_pritunl_users(
         api_secret=api_secret,
         base_url=base_url,
         method="GET",
-        path="/user/%s" % organization_id,
+        path=f"/user/{organization_id}",
         validate_certs=validate_certs,
     )
 
@@ -106,7 +106,7 @@ def _delete_pritunl_user(
         api_secret=api_secret,
         base_url=base_url,
         method="DELETE",
-        path="/user/%s/%s" % (organization_id, user_id),
+        path=f"/user/{organization_id}/{user_id}",
         validate_certs=validate_certs,
     )
 
@@ -119,7 +119,7 @@ def _post_pritunl_user(
         api_secret=api_secret,
         base_url=base_url,
         method="POST",
-        path="/user/%s" % organization_id,
+        path=f"/user/{organization_id}",
         headers={"Content-Type": "application/json"},
         data=json.dumps(user_data),
         validate_certs=validate_certs,
@@ -140,7 +140,7 @@ def _put_pritunl_user(
         api_secret=api_secret,
         base_url=base_url,
         method="PUT",
-        path="/user/%s/%s" % (organization_id, user_id),
+        path=f"/user/{organization_id}/{user_id}",
         headers={"Content-Type": "application/json"},
         data=json.dumps(user_data),
         validate_certs=validate_certs,
@@ -161,17 +161,15 @@ def list_pritunl_organizations(
 
     if response.getcode() != 200:
         raise PritunlException("Could not retrieve organizations from Pritunl")
-    else:
-        for org in json.loads(response.read()):
+    for org in json.loads(response.read()):
             # No filtering
-            if filters is None:
-                orgs.append(org)
-            else:
-                if not any(
-                    filter_val != org[filter_key]
-                    for filter_key, filter_val in iteritems(filters)
-                ):
-                    orgs.append(org)
+        if filters is None:
+            orgs.append(org)
+        elif all(
+            filter_val == org[filter_key]
+            for filter_key, filter_val in iteritems(filters)
+        ):
+            orgs.append(org)
 
     return orgs
 
@@ -191,18 +189,16 @@ def list_pritunl_users(
 
     if response.getcode() != 200:
         raise PritunlException("Could not retrieve users from Pritunl")
-    else:
-        for user in json.loads(response.read()):
+    for user in json.loads(response.read()):
             # No filtering
-            if filters is None:
-                users.append(user)
+        if filters is None:
+            users.append(user)
 
-            else:
-                if not any(
-                    filter_val != user[filter_key]
-                    for filter_key, filter_val in iteritems(filters)
-                ):
-                    users.append(user)
+        elif all(
+            filter_val == user[filter_key]
+            for filter_key, filter_val in iteritems(filters)
+        ):
+            users.append(user)
 
     return users
 
@@ -224,8 +220,9 @@ def post_pritunl_organization(
 
     if response.getcode() != 200:
         raise PritunlException(
-            "Could not add organization %s to Pritunl" % (organization_name)
+            f"Could not add organization {organization_name} to Pritunl"
         )
+
     # The user PUT request returns the updated user object
     return json.loads(response.read())
 
@@ -252,9 +249,9 @@ def post_pritunl_user(
 
         if response.getcode() != 200:
             raise PritunlException(
-                "Could not remove user %s from organization %s from Pritunl"
-                % (user_id, organization_id)
+                f"Could not remove user {user_id} from organization {organization_id} from Pritunl"
             )
+
         # user POST request returns an array of a single item,
         # so return this item instead of the list
         return json.loads(response.read())[0]
@@ -271,9 +268,9 @@ def post_pritunl_user(
 
         if response.getcode() != 200:
             raise PritunlException(
-                "Could not update user %s from organization %s from Pritunl"
-                % (user_id, organization_id)
+                f"Could not update user {user_id} from organization {organization_id} from Pritunl"
             )
+
         # The user PUT request returns the updated user object
         return json.loads(response.read())
 
@@ -291,8 +288,9 @@ def delete_pritunl_organization(
 
     if response.getcode() != 200:
         raise PritunlException(
-            "Could not remove organization %s from Pritunl" % (organization_id)
+            f"Could not remove organization {organization_id} from Pritunl"
         )
+
 
     return json.loads(response.read())
 
@@ -311,9 +309,9 @@ def delete_pritunl_user(
 
     if response.getcode() != 200:
         raise PritunlException(
-            "Could not remove user %s from organization %s from Pritunl"
-            % (user_id, organization_id)
+            f"Could not remove user {user_id} from organization {organization_id} from Pritunl"
         )
+
 
     return json.loads(response.read())
 
@@ -354,10 +352,10 @@ def pritunl_auth_request(
     }
 
     if headers:
-        auth_headers.update(headers)
+        auth_headers |= headers
 
     try:
-        uri = "%s%s" % (base_url, path)
+        uri = f"{base_url}{path}"
 
         return open_url(
             uri,

@@ -160,7 +160,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
         credentials = urlencode({'username': self.proxmox_user, 'password': self.proxmox_password, })
 
         a = self._get_session()
-        ret = a.post('%s/api2/json/access/ticket' % self.proxmox_url, data=credentials)
+        ret = a.post(f'{self.proxmox_url}/api2/json/access/ticket', data=credentials)
 
         json = ret.json()
 
@@ -192,38 +192,35 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                 if 'data' not in json:
                     # /hosts/:id does not have a 'data' key
                     data = json
-                    break
                 elif isinstance(json['data'], MutableMapping):
                     # /facts are returned as dict in 'data'
                     data = json['data']
-                    break
                 else:
                     # /hosts 's 'results' is a list of all hosts, returned is paginated
                     data = data + json['data']
-                    break
-
+                break
             self._cache[self.cache_key][url] = data
 
         return self._cache[self.cache_key][url]
 
     def _get_nodes(self):
-        return self._get_json("%s/api2/json/nodes" % self.proxmox_url)
+        return self._get_json(f"{self.proxmox_url}/api2/json/nodes")
 
     def _get_pools(self):
-        return self._get_json("%s/api2/json/pools" % self.proxmox_url)
+        return self._get_json(f"{self.proxmox_url}/api2/json/pools")
 
     def _get_lxc_per_node(self, node):
-        return self._get_json("%s/api2/json/nodes/%s/lxc" % (self.proxmox_url, node))
+        return self._get_json(f"{self.proxmox_url}/api2/json/nodes/{node}/lxc")
 
     def _get_qemu_per_node(self, node):
-        return self._get_json("%s/api2/json/nodes/%s/qemu" % (self.proxmox_url, node))
+        return self._get_json(f"{self.proxmox_url}/api2/json/nodes/{node}/qemu")
 
     def _get_members_per_pool(self, pool):
-        ret = self._get_json("%s/api2/json/pools/%s" % (self.proxmox_url, pool))
+        ret = self._get_json(f"{self.proxmox_url}/api2/json/pools/{pool}")
         return ret['members']
 
     def _get_node_ip(self, node):
-        ret = self._get_json("%s/api2/json/nodes/%s/network" % (self.proxmox_url, node))
+        ret = self._get_json(f"{self.proxmox_url}/api2/json/nodes/{node}/network")
 
         for iface in ret:
             try:
@@ -236,10 +233,9 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
         try:
             ifaces = self._get_json(
-                "%s/api2/json/nodes/%s/%s/%s/agent/network-get-interfaces" % (
-                    self.proxmox_url, node, vmtype, vmid
-                )
+                f"{self.proxmox_url}/api2/json/nodes/{node}/{vmtype}/{vmid}/agent/network-get-interfaces"
             )['result']
+
 
             if "error" in ifaces:
                 if "class" in ifaces["error"]:
@@ -252,30 +248,46 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                         self.display.v("Retrieving network interfaces from guest agents has been disabled")
                 return result
 
-            for iface in ifaces:
-                result.append({
+            result.extend(
+                {
                     'name': iface['name'],
-                    'mac-address': iface['hardware-address'] if 'hardware-address' in iface else '',
-                    'ip-addresses': ["%s/%s" % (ip['ip-address'], ip['prefix']) for ip in iface['ip-addresses']] if 'ip-addresses' in iface else []
-                })
+                    'mac-address': iface['hardware-address']
+                    if 'hardware-address' in iface
+                    else '',
+                    'ip-addresses': [
+                        f"{ip['ip-address']}/{ip['prefix']}"
+                        for ip in iface['ip-addresses']
+                    ]
+                    if 'ip-addresses' in iface
+                    else [],
+                }
+                for iface in ifaces
+            )
+
         except requests.HTTPError:
             pass
 
         return result
 
     def _get_vm_config(self, node, vmid, vmtype, name):
-        ret = self._get_json("%s/api2/json/nodes/%s/%s/%s/config" % (self.proxmox_url, node, vmtype, vmid))
+        ret = self._get_json(
+            f"{self.proxmox_url}/api2/json/nodes/{node}/{vmtype}/{vmid}/config"
+        )
+
 
         node_key = 'node'
-        node_key = self.to_safe('%s%s' % (self.get_option('facts_prefix'), node_key.lower()))
+        node_key = self.to_safe(f"{self.get_option('facts_prefix')}{node_key.lower()}")
         self.inventory.set_variable(name, node_key, node)
 
         vmid_key = 'vmid'
-        vmid_key = self.to_safe('%s%s' % (self.get_option('facts_prefix'), vmid_key.lower()))
+        vmid_key = self.to_safe(f"{self.get_option('facts_prefix')}{vmid_key.lower()}")
         self.inventory.set_variable(name, vmid_key, vmid)
 
         vmtype_key = 'vmtype'
-        vmtype_key = self.to_safe('%s%s' % (self.get_option('facts_prefix'), vmtype_key.lower()))
+        vmtype_key = self.to_safe(
+            f"{self.get_option('facts_prefix')}{vmtype_key.lower()}"
+        )
+
         self.inventory.set_variable(name, vmtype_key, vmtype)
 
         plaintext_configs = [
@@ -284,25 +296,26 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
         for config in ret:
             key = config
-            key = self.to_safe('%s%s' % (self.get_option('facts_prefix'), key.lower()))
+            key = self.to_safe(f"{self.get_option('facts_prefix')}{key.lower()}")
             value = ret[config]
             try:
                 # fixup disk images as they have no key
                 if config == 'rootfs' or config.startswith(('virtio', 'sata', 'ide', 'scsi')):
-                    value = ('disk_image=' + value)
+                    value = f'disk_image={value}'
 
                 # Additional field containing parsed tags as list
                 if config == 'tags':
-                    parsed_key = self.to_safe('%s%s' % (key, "_parsed"))
+                    parsed_key = self.to_safe(f'{key}_parsed')
                     parsed_value = [tag.strip() for tag in value.split(",")]
                     self.inventory.set_variable(name, parsed_key, parsed_value)
 
                 # The first field in the agent string tells you whether the agent is enabled
                 # the rest of the comma separated string is extra config for the agent
                 if config == 'agent' and int(value.split(',')[0]):
-                    agent_iface_key = self.to_safe('%s%s' % (key, "_interfaces"))
-                    agent_iface_value = self._get_agent_network_interfaces(node, vmid, vmtype)
-                    if agent_iface_value:
+                    agent_iface_key = self.to_safe(f'{key}_interfaces')
+                    if agent_iface_value := self._get_agent_network_interfaces(
+                        node, vmid, vmtype
+                    ):
                         self.inventory.set_variable(name, agent_iface_key, agent_iface_value)
 
                 if not (isinstance(value, int) or ',' not in value):
@@ -318,18 +331,30 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                 return None
 
     def _get_vm_status(self, node, vmid, vmtype, name):
-        ret = self._get_json("%s/api2/json/nodes/%s/%s/%s/status/current" % (self.proxmox_url, node, vmtype, vmid))
+        ret = self._get_json(
+            f"{self.proxmox_url}/api2/json/nodes/{node}/{vmtype}/{vmid}/status/current"
+        )
+
 
         status = ret['status']
         status_key = 'status'
-        status_key = self.to_safe('%s%s' % (self.get_option('facts_prefix'), status_key.lower()))
+        status_key = self.to_safe(
+            f"{self.get_option('facts_prefix')}{status_key.lower()}"
+        )
+
         self.inventory.set_variable(name, status_key, status)
 
     def _get_vm_snapshots(self, node, vmid, vmtype, name):
-        ret = self._get_json("%s/api2/json/nodes/%s/%s/%s/snapshot" % (self.proxmox_url, node, vmtype, vmid))
+        ret = self._get_json(
+            f"{self.proxmox_url}/api2/json/nodes/{node}/{vmtype}/{vmid}/snapshot"
+        )
+
 
         snapshots_key = 'snapshots'
-        snapshots_key = self.to_safe('%s%s' % (self.get_option('facts_prefix'), snapshots_key.lower()))
+        snapshots_key = self.to_safe(
+            f"{self.get_option('facts_prefix')}{snapshots_key.lower()}"
+        )
+
 
         snapshots = [snapshot['name'] for snapshot in ret if snapshot['name'] != 'current']
         self.inventory.set_variable(name, snapshots_key, snapshots)
@@ -357,19 +382,34 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
             # FIXME: this can probably be cleaner
             # create groups
             lxc_group = 'all_lxc'
-            lxc_group = self.to_safe('%s%s' % (self.get_option('group_prefix'), lxc_group.lower()))
+            lxc_group = self.to_safe(
+                f"{self.get_option('group_prefix')}{lxc_group.lower()}"
+            )
+
             self.inventory.add_group(lxc_group)
             qemu_group = 'all_qemu'
-            qemu_group = self.to_safe('%s%s' % (self.get_option('group_prefix'), qemu_group.lower()))
+            qemu_group = self.to_safe(
+                f"{self.get_option('group_prefix')}{qemu_group.lower()}"
+            )
+
             self.inventory.add_group(qemu_group)
             nodes_group = 'nodes'
-            nodes_group = self.to_safe('%s%s' % (self.get_option('group_prefix'), nodes_group.lower()))
+            nodes_group = self.to_safe(
+                f"{self.get_option('group_prefix')}{nodes_group.lower()}"
+            )
+
             self.inventory.add_group(nodes_group)
             running_group = 'all_running'
-            running_group = self.to_safe('%s%s' % (self.get_option('group_prefix'), running_group.lower()))
+            running_group = self.to_safe(
+                f"{self.get_option('group_prefix')}{running_group.lower()}"
+            )
+
             self.inventory.add_group(running_group)
             stopped_group = 'all_stopped'
-            stopped_group = self.to_safe('%s%s' % (self.get_option('group_prefix'), stopped_group.lower()))
+            stopped_group = self.to_safe(
+                f"{self.get_option('group_prefix')}{stopped_group.lower()}"
+            )
+
             self.inventory.add_group(stopped_group)
 
             if node.get('node'):
@@ -387,7 +427,10 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                     self.inventory.set_variable(node['node'], 'ansible_host', ip)
 
                 # get LXC containers for this node
-                node_lxc_group = self.to_safe('%s%s' % (self.get_option('group_prefix'), ('%s_lxc' % node['node']).lower()))
+                node_lxc_group = self.to_safe(
+                    f"""{self.get_option('group_prefix')}{f"{node['node']}_lxc".lower()}"""
+                )
+
                 self.inventory.add_group(node_lxc_group)
                 for lxc in self._get_lxc_per_node(node['node']):
                     self.inventory.add_host(lxc['name'])
@@ -410,7 +453,10 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                     self._apply_constructable(lxc["name"], self.inventory.get_host(lxc['name']).get_vars())
 
                 # get QEMU vm's for this node
-                node_qemu_group = self.to_safe('%s%s' % (self.get_option('group_prefix'), ('%s_qemu' % node['node']).lower()))
+                node_qemu_group = self.to_safe(
+                    f"""{self.get_option('group_prefix')}{f"{node['node']}_qemu".lower()}"""
+                )
+
                 self.inventory.add_group(node_qemu_group)
                 for qemu in self._get_qemu_per_node(node['node']):
                     if qemu.get('template'):
@@ -438,13 +484,15 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
         for pool in self._get_pools():
             if pool.get('poolid'):
                 pool_group = 'pool_' + pool['poolid']
-                pool_group = self.to_safe('%s%s' % (self.get_option('group_prefix'), pool_group.lower()))
+                pool_group = self.to_safe(
+                    f"{self.get_option('group_prefix')}{pool_group.lower()}"
+                )
+
                 self.inventory.add_group(pool_group)
 
                 for member in self._get_members_per_pool(pool['poolid']):
-                    if member.get('name'):
-                        if not member.get('template'):
-                            self.inventory.add_child(pool_group, member['name'])
+                    if member.get('name') and not member.get('template'):
+                        self.inventory.add_child(pool_group, member['name'])
 
     def parse(self, inventory, loader, path, cache=True):
         if not HAS_REQUESTS:

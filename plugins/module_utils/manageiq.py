@@ -94,12 +94,12 @@ class ManageIQ(object):
         ca_bundle_path = params['ca_cert']
 
         self._module = module
-        self._api_url = url + '/api'
+        self._api_url = f'{url}/api'
         self._auth = dict(user=username, password=password, token=token)
         try:
             self._client = ManageIQClient(self._api_url, self._auth, verify_ssl=verify_ssl, ca_bundle_path=ca_bundle_path)
         except Exception as e:
-            self.module.fail_json(msg="failed to open connection (%s): %s" % (url, str(e)))
+            self.module.fail_json(msg=f"failed to open connection ({url}): {str(e)}")
 
     @property
     def module(self):
@@ -148,10 +148,8 @@ class ManageIQ(object):
         Returns:
             the resource as an object if it exists in manageiq, Fail otherwise.
         """
-        resource = self.find_collection_resource_by(collection_name, **params)
-        if resource:
+        if resource := self.find_collection_resource_by(collection_name, **params):
             return resource
-        else:
-            msg = "{collection_name} where {params} does not exist in manageiq".format(
-                collection_name=collection_name, params=str(params))
-            self.module.fail_json(msg=msg)
+        msg = "{collection_name} where {params} does not exist in manageiq".format(
+            collection_name=collection_name, params=str(params))
+        self.module.fail_json(msg=msg)

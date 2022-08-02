@@ -35,16 +35,12 @@ class GandiLiveDNSAPI(object):
 
     def _build_error_message(self, module, info):
         s = ''
-        body = info.get('body')
-        if body:
-            errors = module.from_json(body).get('errors')
-            if errors:
+        if body := info.get('body'):
+            if errors := module.from_json(body).get('errors'):
                 error = errors[0]
-                name = error.get('name')
-                if name:
+                if name := error.get('name'):
                     s += '{0} :'.format(name)
-                description = error.get('description')
-                if description:
+                if description := error.get('description'):
                     s += description
         return s
 
@@ -56,7 +52,7 @@ class GandiLiveDNSAPI(object):
             try:
                 data = json.dumps(payload)
             except Exception as e:
-                self.module.fail_json(msg="Failed to encode payload as JSON: %s " % to_native(e))
+                self.module.fail_json(msg=f"Failed to encode payload as JSON: {to_native(e)} ")
 
         resp, info = fetch_url(self.module,
                                self.api_endpoint + api_call,
@@ -109,11 +105,11 @@ class GandiLiveDNSAPI(object):
         return [self.build_result(r, domain) for r in results]
 
     def get_records(self, record, type, domain):
-        url = '/domains/%s/records' % (domain)
+        url = f'/domains/{domain}/records'
         if record:
-            url += '/%s' % (record)
+            url += f'/{record}'
             if type:
-                url += '/%s' % (type)
+                url += f'/{type}'
 
         records, status = self._gandi_api_call(url, error_on_404=False)
 
@@ -132,7 +128,7 @@ class GandiLiveDNSAPI(object):
         return records
 
     def create_record(self, record, type, values, ttl, domain):
-        url = '/domains/%s/records' % (domain)
+        url = f'/domains/{domain}/records'
         new_record = {
             'rrset_name': record,
             'rrset_type': type,
@@ -141,13 +137,10 @@ class GandiLiveDNSAPI(object):
         }
         record, status = self._gandi_api_call(url, method='POST', payload=new_record)
 
-        if status in (200, 201,):
-            return new_record
-
-        return None
+        return new_record if status in (200, 201,) else None
 
     def update_record(self, record, type, values, ttl, domain):
-        url = '/domains/%s/records/%s/%s' % (domain, record, type)
+        url = f'/domains/{domain}/records/{record}/{type}'
         new_record = {
             'rrset_values': values,
             'rrset_ttl': ttl,
@@ -156,7 +149,7 @@ class GandiLiveDNSAPI(object):
         return record
 
     def delete_record(self, record, type, domain):
-        url = '/domains/%s/records/%s/%s' % (domain, record, type)
+        url = f'/domains/{domain}/records/{record}/{type}'
 
         self._gandi_api_call(url, method='DELETE')
 
@@ -164,16 +157,13 @@ class GandiLiveDNSAPI(object):
         if record == '':
             record = '@'
 
-        records = self.get_records(record, type, domain)
-
-        if records:
+        if records := self.get_records(record, type, domain):
             cur_record = records[0]
 
             self.changed = True
 
             if values is not None and set(cur_record['rrset_values']) != set(values):
-                new_values = set(cur_record['rrset_values']) - set(values)
-                if new_values:
+                if new_values := set(cur_record['rrset_values']) - set(values):
                     # Removing one or more values from a record, we update the record with the remaining values
                     self.update_record(record, type, list(new_values), cur_record['rrset_ttl'], domain)
                     records = self.get_records(record, type, domain)
@@ -190,9 +180,7 @@ class GandiLiveDNSAPI(object):
         if record == '':
             record = '@'
 
-        records = self.get_records(record, type, domain)
-
-        if records:
+        if records := self.get_records(record, type, domain):
             cur_record = records[0]
 
             do_update = False
@@ -201,24 +189,23 @@ class GandiLiveDNSAPI(object):
             if values is not None and set(cur_record['rrset_values']) != set(values):
                 do_update = True
 
-            if do_update:
-                if self.module.check_mode:
-                    result = dict(
-                        rrset_type=type,
-                        rrset_name=record,
-                        rrset_values=values,
-                        rrset_ttl=ttl
-                    )
-                else:
-                    self.update_record(record, type, values, ttl, domain)
-
-                    records = self.get_records(record, type, domain)
-                    result = records[0]
-                self.changed = True
-                return result, self.changed
-            else:
+            if not do_update:
                 return cur_record, self.changed
 
+            if self.module.check_mode:
+                result = dict(
+                    rrset_type=type,
+                    rrset_name=record,
+                    rrset_values=values,
+                    rrset_ttl=ttl
+                )
+            else:
+                self.update_record(record, type, values, ttl, domain)
+
+                records = self.get_records(record, type, domain)
+                result = records[0]
+            self.changed = True
+            return result, self.changed
         if self.module.check_mode:
             new_record = dict(
                 rrset_type=type,

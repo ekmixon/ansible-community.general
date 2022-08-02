@@ -47,7 +47,7 @@ class RegistrationBase(object):
         raise NotImplementedError("Must be implemented by a sub-class")
 
     def update_plugin_conf(self, plugin, enabled=True):
-        plugin_conf = '/etc/yum/pluginconf.d/%s.conf' % plugin
+        plugin_conf = f'/etc/yum/pluginconf.d/{plugin}.conf'
 
         if os.path.isfile(plugin_conf):
             tmpfd, tmpfile = tempfile.mkstemp()
@@ -60,9 +60,8 @@ class RegistrationBase(object):
             else:
                 cfg.set('main', 'enabled', 0)
 
-            fd = open(tmpfile, 'w+')
-            cfg.write(fd)
-            fd.close()
+            with open(tmpfile, 'w+') as fd:
+                cfg.write(fd)
             self.module.atomic_move(tmpfile, plugin_conf)
 
     def subscribe(self, **kwargs):
@@ -120,9 +119,11 @@ class Rhsm(RegistrationBase):
         # Pass supplied **kwargs as parameters to subscription-manager.  Ignore
         # non-configuration parameters and replace '_' with '.'.  For example,
         # 'server_hostname' becomes '--system.hostname'.
-        for k, v in kwargs.items():
-            if re.search(r'^(system|rhsm)_', k):
-                args.append('--%s=%s' % (k.replace('_', '.'), v))
+        args.extend(
+            f"--{k.replace('_', '.')}={v}"
+            for k, v in kwargs.items()
+            if re.search(r'^(system|rhsm)_', k)
+        )
 
         self.module.run_command(args, check_rc=True)
 
@@ -136,10 +137,7 @@ class Rhsm(RegistrationBase):
         '''
         args = ['subscription-manager', 'identity']
         rc, stdout, stderr = self.module.run_command(args, check_rc=False)
-        if rc == 0:
-            return True
-        else:
-            return False
+        return rc == 0
 
     def register(self, username, password, autosubscribe, activationkey):
         '''
@@ -212,12 +210,9 @@ class RhsmPool(object):
         return str(self.__getattribute__('_name'))
 
     def subscribe(self):
-        args = "subscription-manager subscribe --pool %s" % self.PoolId
+        args = f"subscription-manager subscribe --pool {self.PoolId}"
         rc, stdout, stderr = self.module.run_command(args, check_rc=True)
-        if rc == 0:
-            return True
-        else:
-            return False
+        return rc == 0
 
 
 class RhsmPools(object):

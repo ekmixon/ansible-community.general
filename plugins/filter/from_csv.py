@@ -33,10 +33,9 @@ def from_csv(data, dialect='excel', fieldnames=None, delimiter=None, skipinitial
     data_list = []
 
     try:
-        for row in reader:
-            data_list.append(row)
+        data_list.extend(iter(reader))
     except CSVError as e:
-        raise AnsibleFilterError("Unable to process file: %s" % to_native(e))
+        raise AnsibleFilterError(f"Unable to process file: {to_native(e)}")
 
     return data_list
 

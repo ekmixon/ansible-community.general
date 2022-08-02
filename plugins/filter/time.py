@@ -62,22 +62,29 @@ def to_time_unit(human_time, unit='ms', **kwargs):
         unit_factors['mo'] = unit_factors['mo'][:-1] + [kwargs.pop('month')]
 
     if kwargs:
-        raise AnsibleFilterError('to_time_unit() got unknown keyword arguments: %s' % ', '.join(kwargs.keys()))
+        raise AnsibleFilterError(
+            f"to_time_unit() got unknown keyword arguments: {', '.join(kwargs.keys())}"
+        )
+
 
     result = 0
     for h_time_string in human_time.split():
         res = re.match(r'(-?\d+)(\w+)', h_time_string)
         if not res:
             raise AnsibleFilterError(
-                "to_time_unit() can not interpret following string: %s" % human_time)
+                f"to_time_unit() can not interpret following string: {human_time}"
+            )
 
-        h_time_int = int(res.group(1))
-        h_time_unit = res.group(2)
+
+        h_time_int = int(res[1])
+        h_time_unit = res[2]
 
         h_time_unit = unit_to_short_form.get(h_time_unit.rstrip('s'), h_time_unit)
         if h_time_unit not in unit_factors:
             raise AnsibleFilterError(
-                "to_time_unit() can not interpret following string: %s" % human_time)
+                f"to_time_unit() can not interpret following string: {human_time}"
+            )
+
 
         time_in_milliseconds = h_time_int * multiply(unit_factors[h_time_unit])
         result += time_in_milliseconds
@@ -128,7 +135,7 @@ class FilterModule(object):
     ''' Ansible time jinja2 filters '''
 
     def filters(self):
-        filters = {
+        return {
             'to_time_unit': to_time_unit,
             'to_milliseconds': to_milliseconds,
             'to_seconds': to_seconds,
@@ -139,5 +146,3 @@ class FilterModule(object):
             'to_months': to_months,
             'to_years': to_years,
         }
-
-        return filters

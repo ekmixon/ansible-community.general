@@ -126,15 +126,20 @@ class CallbackModule(CallbackBase):
     def send_msg_v2(self, msg, msg_format='text', color='yellow', notify=False):
         """Method for sending a message to HipChat"""
 
-        headers = {'Authorization': 'Bearer %s' % self.token, 'Content-Type': 'application/json'}
+        headers = {
+            'Authorization': f'Bearer {self.token}',
+            'Content-Type': 'application/json',
+        }
 
-        body = {}
-        body['room_id'] = self.room
-        body['from'] = self.from_name[:15]  # max length is 15
-        body['message'] = msg
-        body['message_format'] = msg_format
-        body['color'] = color
-        body['notify'] = self.allow_notify and notify
+
+        body = {
+            'room_id': self.room,
+            'from': self.from_name[:15],
+            'message': msg,
+            'message_format': msg_format,
+            'color': color,
+            'notify': self.allow_notify and notify,
+        }
 
         data = json.dumps(body)
         url = self.API_V2_URL + "room/{room_id}/notification".format(room_id=self.room)
@@ -147,15 +152,16 @@ class CallbackModule(CallbackBase):
     def send_msg_v1(self, msg, msg_format='text', color='yellow', notify=False):
         """Method for sending a message to HipChat"""
 
-        params = {}
-        params['room_id'] = self.room
-        params['from'] = self.from_name[:15]  # max length is 15
-        params['message'] = msg
-        params['message_format'] = msg_format
-        params['color'] = color
-        params['notify'] = int(self.allow_notify and notify)
+        params = {
+            'room_id': self.room,
+            'from': self.from_name[:15],
+            'message': msg,
+            'message_format': msg_format,
+            'color': color,
+            'notify': int((self.allow_notify and notify)),
+        }
 
-        url = ('%s?auth_token=%s' % (self.API_V1_URL, self.token))
+        url = f'{self.API_V1_URL}?auth_token={self.token}'
         try:
             response = open_url(url, data=urlencode(params))
             return response.read()
@@ -177,10 +183,11 @@ class CallbackModule(CallbackBase):
             self.playbook_name, dummy = os.path.splitext(os.path.basename(self.play.playbook.filename))
             host_list = self.play.playbook.inventory.host_list
             inventory = os.path.basename(os.path.realpath(host_list))
-            self.send_msg("%s: Playbook initiated by %s against %s" %
-                          (self.playbook_name,
-                           self.play.playbook.remote_user,
-                           inventory), notify=True)
+            self.send_msg(
+                f"{self.playbook_name}: Playbook initiated by {self.play.playbook.remote_user} against {inventory}",
+                notify=True,
+            )
+
             self.printed_playbook = True
             subset = self.play.playbook.inventory._subset
             skip_tags = self.play.playbook.skip_tags
@@ -191,8 +198,7 @@ class CallbackModule(CallbackBase):
                            ', '.join(subset) if subset else subset))
 
         # This is where we actually say we are starting a play
-        self.send_msg("%s: Starting play: %s" %
-                      (self.playbook_name, name))
+        self.send_msg(f"{self.playbook_name}: Starting play: {name}")
 
     def playbook_on_stats(self, stats):
         """Display info about playbook statistics"""
@@ -215,13 +221,16 @@ class CallbackModule(CallbackBase):
             t.add_row([h] + [s[k] for k in ['ok', 'changed', 'unreachable',
                                             'failures']])
 
-        self.send_msg("%s: Playbook complete" % self.playbook_name,
-                      notify=True)
+        self.send_msg(f"{self.playbook_name}: Playbook complete", notify=True)
 
         if failures or unreachable:
             color = 'red'
-            self.send_msg("%s: Failures detected" % self.playbook_name,
-                          color=color, notify=True)
+            self.send_msg(
+                f"{self.playbook_name}: Failures detected",
+                color=color,
+                notify=True,
+            )
+
         else:
             color = 'green'
 

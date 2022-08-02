@@ -244,7 +244,7 @@ class CacheModule(BaseCacheModule):
         return self._keys.copy()
 
     def __getstate__(self):
-        return dict()
+        return {}
 
     def __setstate__(self, data):
         self.__init__()

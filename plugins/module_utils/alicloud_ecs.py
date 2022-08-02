@@ -72,12 +72,13 @@ def ecs_argument_spec():
 
 def get_acs_connection_info(params):
 
-    ecs_params = dict(acs_access_key_id=params.get('alicloud_access_key'),
-                      acs_secret_access_key=params.get('alicloud_secret_key'),
-                      security_token=params.get('alicloud_security_token'),
-                      ecs_role_name=params.get('ecs_role_name'),
-                      user_agent='Ansible-Provider-Alicloud')
-    return ecs_params
+    return dict(
+        acs_access_key_id=params.get('alicloud_access_key'),
+        acs_secret_access_key=params.get('alicloud_secret_key'),
+        security_token=params.get('alicloud_security_token'),
+        ecs_role_name=params.get('ecs_role_name'),
+        user_agent='Ansible-Provider-Alicloud',
+    )
 
 
 def connect_to_acs(acs_module, region, **params):
@@ -85,10 +86,14 @@ def connect_to_acs(acs_module, region, **params):
     if not conn:
         if region not in [acs_module_region.id for acs_module_region in acs_module.regions()]:
             raise AnsibleACSError(
-                "Region %s does not seem to be available for acs module %s." % (region, acs_module.__name__))
+                f"Region {region} does not seem to be available for acs module {acs_module.__name__}."
+            )
+
         else:
             raise AnsibleACSError(
-                "Unknown problem connecting to region %s for acs module %s." % (region, acs_module.__name__))
+                f"Unknown problem connecting to region {region} for acs module {acs_module.__name__}."
+            )
+
     return conn
 
 
@@ -103,13 +108,17 @@ def get_assume_role(params):
         assume_role['alicloud_assume_role_policy'] = params['assume_role'].get('policy')
 
     assume_role_params = {
-        'role_arn': params.get('alicloud_assume_role_arn') if params.get('alicloud_assume_role_arn') else assume_role.get('alicloud_assume_role_arn'),
-        'role_session_name': params.get('alicloud_assume_role_session_name') if params.get('alicloud_assume_role_session_name')
-        else assume_role.get('alicloud_assume_role_session_name'),
-        'duration_seconds': params.get('alicloud_assume_role_session_expiration') if params.get('alicloud_assume_role_session_expiration')
-        else assume_role.get('alicloud_assume_role_session_expiration', 3600),
-        'policy': assume_role.get('alicloud_assume_role_policy', {})
+        'role_arn': params.get('alicloud_assume_role_arn')
+        or assume_role.get('alicloud_assume_role_arn'),
+        'role_session_name': params.get('alicloud_assume_role_session_name')
+        or assume_role.get('alicloud_assume_role_session_name'),
+        'duration_seconds': params.get(
+            'alicloud_assume_role_session_expiration'
+        )
+        or assume_role.get('alicloud_assume_role_session_expiration', 3600),
+        'policy': assume_role.get('alicloud_assume_role_policy', {}),
     }
+
 
     try:
         sts = connect_to_acs(footmark.sts, params.get('alicloud_region'), **sts_params).assume_role(**assume_role_params).read()
@@ -122,7 +131,11 @@ def get_assume_role(params):
 
 def get_profile(params):
     if not params['alicloud_access_key'] and not params['ecs_role_name'] and params['profile']:
-        path = params['shared_credentials_file'] if params['shared_credentials_file'] else os.getenv('HOME') + '/.aliyun/config.json'
+        path = (
+            params['shared_credentials_file']
+            or os.getenv('HOME') + '/.aliyun/config.json'
+        )
+
         auth = {}
         with open(path, 'r') as f:
             for pro in json.load(f)['profiles']:
@@ -164,9 +177,7 @@ def get_profile(params):
 def ecs_connect(module):
     """ Return an ecs connection"""
     ecs_params = get_profile(module.params)
-    # If we have a region specified, connect to its endpoint.
-    region = module.params.get('alicloud_region')
-    if region:
+    if region := module.params.get('alicloud_region'):
         try:
             ecs = connect_to_acs(footmark.ecs, region, **ecs_params)
         except AnsibleACSError as e:
@@ -178,9 +189,7 @@ def ecs_connect(module):
 def slb_connect(module):
     """ Return an slb connection"""
     slb_params = get_profile(module.params)
-    # If we have a region specified, connect to its endpoint.
-    region = module.params.get('alicloud_region')
-    if region:
+    if region := module.params.get('alicloud_region'):
         try:
             slb = connect_to_acs(footmark.slb, region, **slb_params)
         except AnsibleACSError as e:
@@ -192,9 +201,7 @@ def slb_connect(module):
 def dns_connect(module):
     """ Return an dns connection"""
     dns_params = get_profile(module.params)
-    # If we have a region specified, connect to its endpoint.
-    region = module.params.get('alicloud_region')
-    if region:
+    if region := module.params.get('alicloud_region'):
         try:
             dns = connect_to_acs(footmark.dns, region, **dns_params)
         except AnsibleACSError as e:
@@ -206,9 +213,7 @@ def dns_connect(module):
 def vpc_connect(module):
     """ Return an vpc connection"""
     vpc_params = get_profile(module.params)
-    # If we have a region specified, connect to its endpoint.
-    region = module.params.get('alicloud_region')
-    if region:
+    if region := module.params.get('alicloud_region'):
         try:
             vpc = connect_to_acs(footmark.vpc, region, **vpc_params)
         except AnsibleACSError as e:
@@ -220,9 +225,7 @@ def vpc_connect(module):
 def rds_connect(module):
     """ Return an rds connection"""
     rds_params = get_profile(module.params)
-    # If we have a region specified, connect to its endpoint.
-    region = module.params.get('alicloud_region')
-    if region:
+    if region := module.params.get('alicloud_region'):
         try:
             rds = connect_to_acs(footmark.rds, region, **rds_params)
         except AnsibleACSError as e:
@@ -234,9 +237,7 @@ def rds_connect(module):
 def ess_connect(module):
     """ Return an ess connection"""
     ess_params = get_profile(module.params)
-    # If we have a region specified, connect to its endpoint.
-    region = module.params.get('alicloud_region')
-    if region:
+    if region := module.params.get('alicloud_region'):
         try:
             ess = connect_to_acs(footmark.ess, region, **ess_params)
         except AnsibleACSError as e:
@@ -248,9 +249,7 @@ def ess_connect(module):
 def sts_connect(module):
     """ Return an sts connection"""
     sts_params = get_profile(module.params)
-    # If we have a region specified, connect to its endpoint.
-    region = module.params.get('alicloud_region')
-    if region:
+    if region := module.params.get('alicloud_region'):
         try:
             sts = connect_to_acs(footmark.sts, region, **sts_params)
         except AnsibleACSError as e:
@@ -262,9 +261,7 @@ def sts_connect(module):
 def ram_connect(module):
     """ Return an ram connection"""
     ram_params = get_profile(module.params)
-    # If we have a region specified, connect to its endpoint.
-    region = module.params.get('alicloud_region')
-    if region:
+    if region := module.params.get('alicloud_region'):
         try:
             ram = connect_to_acs(footmark.ram, region, **ram_params)
         except AnsibleACSError as e:
@@ -276,9 +273,7 @@ def ram_connect(module):
 def market_connect(module):
     """ Return an market connection"""
     market_params = get_profile(module.params)
-    # If we have a region specified, connect to its endpoint.
-    region = module.params.get('alicloud_region')
-    if region:
+    if region := module.params.get('alicloud_region'):
         try:
             market = connect_to_acs(footmark.market, region, **market_params)
         except AnsibleACSError as e:

@@ -142,7 +142,7 @@ def check_current_entry(module):
         # strip non readable characters as \n
         values = map(lambda s: s.strip(), values)
         existsdict = dict(izip(keys, values))
-        existsdict.update({'exist': True})
+        existsdict['exist'] = True
     return existsdict
 
 
@@ -210,23 +210,19 @@ def main():
                     module.fail_json(
                         msg="could not change inittab", rc=rc, err=err)
                 result['msg'] = "changed inittab entry" + " " + current_entry['name']
-                result['changed'] = True
-
-            # If the entry does not exist create the entry
-            elif not current_entry['exist']:
-                if module.params['insertafter']:
-                    if not module.check_mode:
+            else:
+                if not module.check_mode:
+                    if module.params['insertafter']:
                         (rc, out, err) = module.run_command(
                             [mkitab, '-i', module.params['insertafter'], new_entry])
-                else:
-                    if not module.check_mode:
+                    else:
                         (rc, out, err) = module.run_command(
                             [mkitab, new_entry])
 
                 if rc != 0:
                     module.fail_json(msg="could not adjust inittab", rc=rc, err=err)
                 result['msg'] = "add inittab entry" + " " + module.params['name']
-                result['changed'] = True
+            result['changed'] = True
 
     elif module.params['state'] == 'absent':
         # If the action is remove and the entry exists then remove the entry

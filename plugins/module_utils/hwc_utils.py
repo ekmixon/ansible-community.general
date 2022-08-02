@@ -32,7 +32,7 @@ class HwcModuleException(Exception):
         self._message = message
 
     def __str__(self):
-        return "[HwcClientException] message=%s" % self._message
+        return f"[HwcClientException] message={self._message}"
 
 
 class HwcClientException(Exception):
@@ -43,9 +43,8 @@ class HwcClientException(Exception):
         self._message = message
 
     def __str__(self):
-        msg = " code=%s," % str(self._code) if self._code != 0 else ""
-        return "[HwcClientException]%s message=%s" % (
-            msg, self._message)
+        msg = f" code={str(self._code)}," if self._code != 0 else ""
+        return f"[HwcClientException]{msg} message={self._message}"
 
 
 class HwcClientException404(HwcClientException):
@@ -53,7 +52,7 @@ class HwcClientException404(HwcClientException):
         super(HwcClientException404, self).__init__(404, message)
 
     def __str__(self):
-        return "[HwcClientException404] message=%s" % self._message
+        return f"[HwcClientException404] message={self._message}"
 
 
 def session_method_wrapper(f):
@@ -62,16 +61,14 @@ def session_method_wrapper(f):
             url = self.endpoint + url
             r = f(self, url, *args, **kwargs)
         except Exception as ex:
-            raise HwcClientException(
-                0, "Sending request failed, error=%s" % ex)
+            raise HwcClientException(0, f"Sending request failed, error={ex}")
 
         result = None
         if r.content:
             try:
                 result = r.json()
             except Exception as ex:
-                raise HwcClientException(
-                    0, "Parsing response to json failed, error: %s" % ex)
+                raise HwcClientException(0, f"Parsing response to json failed, error: {ex}")
 
         code = r.status_code
         if code not in [200, 201, 202, 203, 204, 205, 206, 207, 208, 226]:
@@ -100,7 +97,7 @@ class _ServiceClient(object):
         self._client = client
         self._endpoint = endpoint
         self._default_header = {
-            'User-Agent': "Huawei-Ansible-MM-%s" % product,
+            'User-Agent': f"Huawei-Ansible-MM-{product}",
             'Accept': 'application/json',
         }
 
@@ -188,7 +185,7 @@ class Config(object):
             raise_exc=False)
 
     def _get_service_endpoint(self, client, service_type, region):
-        k = "%s.%s" % (service_type, region if region else "")
+        k = f'{service_type}.{region or ""}'
 
         if k in self._endpoints:
             return self._endpoints.get(k)
@@ -198,12 +195,10 @@ class Config(object):
             url = client.get_endpoint(service_type=service_type,
                                       region_name=region, interface="public")
         except Exception as ex:
-            raise HwcClientException(
-                0, "Getting endpoint failed, error=%s" % ex)
+            raise HwcClientException(0, f"Getting endpoint failed, error={ex}")
 
         if url == "":
-            raise HwcClientException(
-                0, "Can not find the enpoint for %s" % service_type)
+            raise HwcClientException(0, f"Can not find the enpoint for {service_type}")
 
         if url[-1] != "/":
             url += "/"
@@ -281,11 +276,7 @@ class _DictComparison(object):
         if set(dict1.keys()) != set(dict2.keys()):
             return False
 
-        for k in dict1:
-            if not self._compare_value(dict1.get(k), dict2.get(k)):
-                return False
-
-        return True
+        return all(self._compare_value(dict1.get(k), dict2.get(k)) for k in dict1)
 
     def _compare_lists(self, list1, list2):
         """Takes in two lists and compares them."""
@@ -295,11 +286,7 @@ class _DictComparison(object):
         if len(list1) != len(list2):
             return False
 
-        for i in range(len(list1)):
-            if not self._compare_value(list1[i], list2[i]):
-                return False
-
-        return True
+        return all(self._compare_value(list1[i], list2[i]) for i in range(len(list1)))
 
     def _compare_value(self, value1, value2):
         """
@@ -350,8 +337,7 @@ def wait_to_finish(target, pending, refresh, timeout, min_interval=1, delay=3):
                 return obj
 
             if pending and status not in pending:
-                raise HwcModuleException(
-                    "unexpect status(%s) occured" % status)
+                raise HwcModuleException(f"unexpect status({status}) occured")
 
         if not is_last_time:
             wait *= 2
@@ -381,7 +367,9 @@ def navigate_value(data, index, array_index=None):
         i = index[n]
         if i not in d:
             raise HwcModuleException(
-                "navigate value failed: key(%s) is not exist in dict" % i)
+                f"navigate value failed: key({i}) is not exist in dict"
+            )
+
         d = d[i]
 
         if not array_index:
@@ -409,7 +397,7 @@ def navigate_value(data, index, array_index=None):
 
 def build_path(module, path, kv=None):
     if kv is None:
-        kv = dict()
+        kv = {}
 
     v = {}
     for p in re.findall(r"{[^/]*}", path):
@@ -419,19 +407,12 @@ def build_path(module, path, kv=None):
             v[n] = str(kv[n])
 
         else:
-            if n in module.params:
-                v[n] = str(module.params.get(n))
-            else:
-                v[n] = ""
-
+            v[n] = str(module.params.get(n)) if n in module.params else ""
     return path.format(**v)
 
 
 def get_region(module):
-    if module.params['region']:
-        return module.params['region']
-
-    return module.params['project'].split("_")[0]
+    return module.params['region'] or module.params['project'].split("_")[0]
 
 
 def is_empty_value(v):

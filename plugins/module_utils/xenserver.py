@@ -144,10 +144,7 @@ def is_valid_ip_prefix(ip_prefix):
 
     ip_prefix_int = int(ip_prefix)
 
-    if ip_prefix_int < 0 or ip_prefix_int > 32:
-        return False
-
-    return True
+    return ip_prefix_int >= 0 and ip_prefix_int <= 32
 
 
 def ip_prefix_to_netmask(ip_prefix, skip_check=False):
@@ -162,11 +159,7 @@ def ip_prefix_to_netmask(ip_prefix, skip_check=False):
         str: IPv4 netmask equivalent to given IPv4 prefix if
         IPv4 prefix is valid, else an empty string.
     """
-    if skip_check:
-        ip_prefix_valid = True
-    else:
-        ip_prefix_valid = is_valid_ip_prefix(ip_prefix)
-
+    ip_prefix_valid = True if skip_check else is_valid_ip_prefix(ip_prefix)
     if ip_prefix_valid:
         return '.'.join([str((0xffffffff << (32 - int(ip_prefix)) >> i) & 0xff) for i in [24, 16, 8, 0]])
     else:
@@ -185,13 +178,9 @@ def ip_netmask_to_prefix(ip_netmask, skip_check=False):
         str: IPv4 prefix equivalent to given IPv4 netmask if
         IPv4 netmask is valid, else an empty string.
     """
-    if skip_check:
-        ip_netmask_valid = True
-    else:
-        ip_netmask_valid = is_valid_ip_netmask(ip_netmask)
-
+    ip_netmask_valid = True if skip_check else is_valid_ip_netmask(ip_netmask)
     if ip_netmask_valid:
-        return str(sum([bin(int(i)).count("1") for i in ip_netmask.split(".")]))
+        return str(sum(bin(int(i)).count("1") for i in ip_netmask.split(".")))
     else:
         return ""
 
@@ -221,17 +210,15 @@ def is_valid_ip6_addr(ip6_addr):
         return False
     elif ip6_addr_split.count("") == 1:
         ip6_addr_split.remove("")
-    else:
-        if len(ip6_addr_split) != 8:
-            return False
+    elif len(ip6_addr_split) != 8:
+        return False
 
     ip6_addr_hextet_regex = re.compile('^[0-9a-f]{1,4}$')
 
-    for ip6_addr_hextet in ip6_addr_split:
-        if not bool(ip6_addr_hextet_regex.match(ip6_addr_hextet)):
-            return False
-
-    return True
+    return all(
+        bool(ip6_addr_hextet_regex.match(ip6_addr_hextet))
+        for ip6_addr_hextet in ip6_addr_split
+    )
 
 
 def is_valid_ip6_prefix(ip6_prefix):
@@ -248,10 +235,7 @@ def is_valid_ip6_prefix(ip6_prefix):
 
     ip6_prefix_int = int(ip6_prefix)
 
-    if ip6_prefix_int < 0 or ip6_prefix_int > 128:
-        return False
-
-    return True
+    return ip6_prefix_int >= 0 and ip6_prefix_int <= 128
 
 
 def get_object_ref(module, name, uuid=None, obj_type="VM", fail=True, msg_prefix=""):
@@ -293,16 +277,19 @@ def get_object_ref(module, name, uuid=None, obj_type="VM", fail=True, msg_prefix
         try:
             # Find object by UUID. If no object is found using given UUID,
             # an exception will be generated.
-            obj_ref = xapi_session.xenapi_request("%s.get_by_uuid" % real_obj_type, (uuid,))
+            obj_ref = xapi_session.xenapi_request(f"{real_obj_type}.get_by_uuid", (uuid,))
         except XenAPI.Failure as f:
             if fail:
                 module.fail_json(msg="%s%s with UUID '%s' not found!" % (msg_prefix, obj_type, uuid))
     elif name:
         try:
             # Find object by name (name_label).
-            obj_ref_list = xapi_session.xenapi_request("%s.get_by_name_label" % real_obj_type, (name,))
+            obj_ref_list = xapi_session.xenapi_request(
+                f"{real_obj_type}.get_by_name_label", (name,)
+            )
+
         except XenAPI.Failure as f:
-            module.fail_json(msg="XAPI ERROR: %s" % f.details)
+            module.fail_json(msg=f"XAPI ERROR: {f.details}")
 
         # If obj_ref_list is empty.
         if not obj_ref_list:
@@ -315,7 +302,10 @@ def get_object_ref(module, name, uuid=None, obj_type="VM", fail=True, msg_prefix
         else:
             obj_ref = obj_ref_list[0]
     else:
-        module.fail_json(msg="%sno valid name or UUID supplied for %s!" % (msg_prefix, obj_type))
+        module.fail_json(
+            msg=f"{msg_prefix}no valid name or UUID supplied for {obj_type}!"
+        )
+
 
     return obj_ref
 
@@ -401,7 +391,7 @@ def gather_vm_params(module, vm_ref):
             vm_params['customization_agent'] = "custom"
 
     except XenAPI.Failure as f:
-        module.fail_json(msg="XAPI ERROR: %s" % f.details)
+        module.fail_json(msg=f"XAPI ERROR: {f.details}")
 
     return vm_params
 
@@ -425,7 +415,9 @@ def gather_vm_facts(module, vm_params):
 
     # Gather facts.
     vm_facts = {
-        "state": xapi_to_module_vm_power_state(vm_params['power_state'].lower()),
+        "state": xapi_to_module_vm_power_state(
+            vm_params['power_state'].lower()
+        ),
         "name": vm_params['name_label'],
         "name_desc": vm_params['name_description'],
         "uuid": vm_params['uuid'],
@@ -433,8 +425,10 @@ def gather_vm_facts(module, vm_params):
         "folder": vm_params['other_config'].get('folder', ''),
         "hardware": {
             "num_cpus": int(vm_params['VCPUs_max']),
-            "num_cpu_cores_per_socket": int(vm_params['platform'].get('cores-per-socket', '1')),
-            "memory_mb": int(int(vm_params['memory_dynamic_max']) / 1048576),
+            "num_cpu_cores_per_socket": int(
+                vm_params['platform'].get('cores-per-socket', '1')
+            ),
+            "memory_mb": int(vm_params['memory_dynamic_max']) // 1048576,
         },
         "disks": [],
         "cdrom": {},
@@ -446,6 +440,7 @@ def gather_vm_facts(module, vm_params):
         "xenstore_data": vm_params['xenstore_data'],
         "customization_agent": vm_params['customization_agent'],
     }
+
 
     for vm_vbd_params in vm_params['VBDs']:
         if vm_vbd_params['type'] == "Disk":
@@ -477,15 +472,21 @@ def gather_vm_facts(module, vm_params):
             "mac": vm_vif_params['MAC'],
             "vif_device": vm_vif_params['device'],
             "mtu": vm_vif_params['MTU'],
-            "ip": vm_guest_metrics_networks.get("%s/ip" % vm_vif_params['device'], ''),
+            "ip": vm_guest_metrics_networks.get(
+                f"{vm_vif_params['device']}/ip", ''
+            ),
             "prefix": "",
             "netmask": "",
             "gateway": "",
-            "ip6": [vm_guest_metrics_networks[ipv6] for ipv6 in sorted(vm_guest_metrics_networks.keys()) if ipv6.startswith("%s/ipv6/" %
-                                                                                                                            vm_vif_params['device'])],
+            "ip6": [
+                vm_guest_metrics_networks[ipv6]
+                for ipv6 in sorted(vm_guest_metrics_networks.keys())
+                if ipv6.startswith(f"{vm_vif_params['device']}/ipv6/")
+            ],
             "prefix6": "",
             "gateway6": "",
         }
+
 
         if vm_params['customization_agent'] == "native":
             if vm_vif_params['ipv4_addresses'] and vm_vif_params['ipv4_addresses'][0]:
@@ -503,7 +504,10 @@ def gather_vm_facts(module, vm_params):
             vm_xenstore_data = vm_params['xenstore_data']
 
             for f in ['prefix', 'netmask', 'gateway', 'prefix6', 'gateway6']:
-                vm_network_params[f] = vm_xenstore_data.get("vm-data/networks/%s/%s" % (vm_vif_params['device'], f), "")
+                vm_network_params[f] = vm_xenstore_data.get(
+                    f"vm-data/networks/{vm_vif_params['device']}/{f}", ""
+                )
+
 
         vm_facts['networks'].append(vm_network_params)
 
@@ -586,9 +590,9 @@ def set_vm_power_state(module, vm_ref, power_state, timeout=300):
                             xapi_session.xenapi.VM.clean_shutdown(vm_ref)
                         else:
                             task_ref = xapi_session.xenapi.Async.VM.clean_shutdown(vm_ref)
-                            task_result = wait_for_task(module, task_ref, timeout)
-
-                            if task_result:
+                            if task_result := wait_for_task(
+                                module, task_ref, timeout
+                            ):
                                 module.fail_json(msg="Guest shutdown task failed: '%s'!" % task_result)
                 else:
                     module.fail_json(msg="Cannot shutdown guest when VM is in state '%s'!" % vm_power_state_current)
@@ -600,9 +604,9 @@ def set_vm_power_state(module, vm_ref, power_state, timeout=300):
                             xapi_session.xenapi.VM.clean_reboot(vm_ref)
                         else:
                             task_ref = xapi_session.xenapi.Async.VM.clean_reboot(vm_ref)
-                            task_result = wait_for_task(module, task_ref, timeout)
-
-                            if task_result:
+                            if task_result := wait_for_task(
+                                module, task_ref, timeout
+                            ):
                                 module.fail_json(msg="Guest reboot task failed: '%s'!" % task_result)
                 else:
                     module.fail_json(msg="Cannot reboot guest when VM is in state '%s'!" % vm_power_state_current)
@@ -611,7 +615,7 @@ def set_vm_power_state(module, vm_ref, power_state, timeout=300):
 
             state_changed = True
     except XenAPI.Failure as f:
-        module.fail_json(msg="XAPI ERROR: %s" % f.details)
+        module.fail_json(msg=f"XAPI ERROR: {f.details}")
 
     return (state_changed, vm_power_state_resulting)
 
@@ -639,11 +643,7 @@ def wait_for_task(module, task_ref, timeout=300):
 
     # If we have to wait indefinitely, make time_left larger than 0 so we can
     # enter while loop.
-    if timeout == 0:
-        time_left = 1
-    else:
-        time_left = timeout
-
+    time_left = 1 if timeout == 0 else timeout
     try:
         while time_left > 0:
             task_status = xapi_session.xenapi.task.get_status(task_ref).lower()
@@ -670,7 +670,7 @@ def wait_for_task(module, task_ref, timeout=300):
 
         xapi_session.xenapi.task.destroy(task_ref)
     except XenAPI.Failure as f:
-        module.fail_json(msg="XAPI ERROR: %s" % f.details)
+        module.fail_json(msg=f"XAPI ERROR: {f.details}")
 
     return result
 
@@ -708,11 +708,7 @@ def wait_for_vm_ip_address(module, vm_ref, timeout=300):
 
         # If we have to wait indefinitely, make time_left larger than 0 so we can
         # enter while loop.
-        if timeout == 0:
-            time_left = 1
-        else:
-            time_left = timeout
-
+        time_left = 1 if timeout == 0 else timeout
         while time_left > 0:
             vm_guest_metrics_ref = xapi_session.xenapi.VM.get_guest_metrics(vm_ref)
 
@@ -733,7 +729,7 @@ def wait_for_vm_ip_address(module, vm_ref, timeout=300):
             module.fail_json(msg="Timed out waiting for VM IP address!")
 
     except XenAPI.Failure as f:
-        module.fail_json(msg="XAPI ERROR: %s" % f.details)
+        module.fail_json(msg=f"XAPI ERROR: {f.details}")
 
     return vm_guest_metrics
 
@@ -786,8 +782,6 @@ class XAPI(object):
         hostname = module.params['hostname']
         username = module.params['username']
         password = module.params['password']
-        ignore_ssl = not module.params['validate_certs']
-
         if hostname == 'localhost':
             cls._xapi_session = XenAPI.xapi_local()
             username = ''
@@ -796,7 +790,9 @@ class XAPI(object):
             # If scheme is not specified we default to http:// because https://
             # is problematic in most setups.
             if not hostname.startswith("http://") and not hostname.startswith("https://"):
-                hostname = "http://%s" % hostname
+                hostname = f"http://{hostname}"
+
+            ignore_ssl = not module.params['validate_certs']
 
             try:
                 # ignore_ssl is supported in XenAPI library from XenServer 7.2
@@ -815,7 +811,10 @@ class XAPI(object):
         try:
             cls._xapi_session.login_with_password(username, password, ANSIBLE_VERSION, 'Ansible')
         except XenAPI.Failure as f:
-            module.fail_json(msg="Unable to log on to XenServer at %s as %s: %s" % (hostname, username, f.details))
+            module.fail_json(
+                msg=f"Unable to log on to XenServer at {hostname} as {username}: {f.details}"
+            )
+
 
         # Disabling atexit should be used in special cases only.
         if disconnect_atexit:
@@ -858,4 +857,4 @@ class XenServerObject(object):
             self.default_sr_ref = self.xapi_session.xenapi.pool.get_default_SR(self.pool_ref)
             self.xenserver_version = get_xenserver_version(module)
         except XenAPI.Failure as f:
-            self.module.fail_json(msg="XAPI ERROR: %s" % f.details)
+            self.module.fail_json(msg=f"XAPI ERROR: {f.details}")

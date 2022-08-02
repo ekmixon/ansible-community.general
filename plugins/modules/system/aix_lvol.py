@@ -153,28 +153,27 @@ def parse_lv(data):
     for line in data.splitlines():
         match = re.search(r"LOGICAL VOLUME:\s+(\w+)\s+VOLUME GROUP:\s+(\w+)", line)
         if match is not None:
-            name = match.group(1)
-            vg = match.group(2)
+            name = match[1]
+            vg = match[2]
             continue
         match = re.search(r"LPs:\s+(\d+).*PPs", line)
         if match is not None:
-            lps = int(match.group(1))
+            lps = int(match[1])
             continue
         match = re.search(r"PP SIZE:\s+(\d+)", line)
         if match is not None:
-            pp_size = int(match.group(1))
+            pp_size = int(match[1])
             continue
         match = re.search(r"INTER-POLICY:\s+(\w+)", line)
         if match is not None:
-            policy = match.group(1)
+            policy = match[1]
             continue
 
-    if not name:
-        return None
-
-    size = lps * pp_size
-
-    return {'name': name, 'vg': vg, 'size': size, 'policy': policy}
+    return (
+        {'name': name, 'vg': vg, 'size': lps * pp_size, 'policy': policy}
+        if name
+        else None
+    )
 
 
 def parse_vg(data):
@@ -183,22 +182,22 @@ def parse_vg(data):
 
         match = re.search(r"VOLUME GROUP:\s+(\w+)", line)
         if match is not None:
-            name = match.group(1)
+            name = match[1]
             continue
 
         match = re.search(r"TOTAL PP.*\((\d+)", line)
         if match is not None:
-            size = int(match.group(1))
+            size = int(match[1])
             continue
 
         match = re.search(r"PP SIZE:\s+(\d+)", line)
         if match is not None:
-            pp_size = int(match.group(1))
+            pp_size = int(match[1])
             continue
 
         match = re.search(r"FREE PP.*\((\d+)", line)
         if match is not None:
-            free = int(match.group(1))
+            free = int(match[1])
             continue
 
     return {'name': name, 'size': size, 'free': free, 'pp_size': pp_size}
@@ -213,12 +212,17 @@ def main():
             size=dict(type='str'),
             opts=dict(type='str', default=''),
             copies=dict(type='int', default=1),
-            state=dict(type='str', default='present', choices=['absent', 'present']),
-            policy=dict(type='str', default='maximum', choices=['maximum', 'minimum']),
-            pvs=dict(type='list', elements='str', default=list())
+            state=dict(
+                type='str', default='present', choices=['absent', 'present']
+            ),
+            policy=dict(
+                type='str', default='maximum', choices=['maximum', 'minimum']
+            ),
+            pvs=dict(type='list', elements='str', default=[]),
         ),
         supports_check_mode=True,
     )
+
 
     vg = module.params['vg']
     lv = module.params['lv']
@@ -232,29 +236,27 @@ def main():
 
     pv_list = ' '.join(pvs)
 
-    if policy == 'maximum':
-        lv_policy = 'x'
-    else:
-        lv_policy = 'm'
-
+    lv_policy = 'x' if policy == 'maximum' else 'm'
     # Add echo command when running in check-mode
-    if module.check_mode:
-        test_opt = 'echo '
-    else:
-        test_opt = ''
-
+    test_opt = 'echo ' if module.check_mode else ''
     # check if system commands are available
     lsvg_cmd = module.get_bin_path("lsvg", required=True)
     lslv_cmd = module.get_bin_path("lslv", required=True)
 
     # Get information on volume group requested
-    rc, vg_info, err = module.run_command("%s %s" % (lsvg_cmd, vg))
+    rc, vg_info, err = module.run_command(f"{lsvg_cmd} {vg}")
 
     if rc != 0:
         if state == 'absent':
-            module.exit_json(changed=False, msg="Volume group %s does not exist." % vg)
+            module.exit_json(changed=False, msg=f"Volume group {vg} does not exist.")
         else:
-            module.fail_json(msg="Volume group %s does not exist." % vg, rc=rc, out=vg_info, err=err)
+            module.fail_json(
+                msg=f"Volume group {vg} does not exist.",
+                rc=rc,
+                out=vg_info,
+                err=err,
+            )
+
 
     this_vg = parse_vg(vg_info)
 
@@ -263,74 +265,121 @@ def main():
         lv_size = round_ppsize(convert_size(module, size), base=this_vg['pp_size'])
 
     # Get information on logical volume requested
-    rc, lv_info, err = module.run_command(
-        "%s %s" % (lslv_cmd, lv))
+    rc, lv_info, err = module.run_command(f"{lslv_cmd} {lv}")
 
-    if rc != 0:
-        if state == 'absent':
-            module.exit_json(changed=False, msg="Logical Volume %s does not exist." % lv)
+    if rc != 0 and state == 'absent':
+        module.exit_json(changed=False, msg=f"Logical Volume {lv} does not exist.")
 
     changed = False
 
     this_lv = parse_lv(lv_info)
 
-    if state == 'present' and not size:
-        if this_lv is None:
-            module.fail_json(msg="No size given.")
+    if state == 'present' and not size and this_lv is None:
+        module.fail_json(msg="No size given.")
 
     if this_lv is None:
         if state == 'present':
             if lv_size > this_vg['free']:
-                module.fail_json(msg="Not enough free space in volume group %s: %s MB free." % (this_vg['name'], this_vg['free']))
+                module.fail_json(
+                    msg=f"Not enough free space in volume group {this_vg['name']}: {this_vg['free']} MB free."
+                )
+
 
             # create LV
             mklv_cmd = module.get_bin_path("mklv", required=True)
 
-            cmd = "%s %s -t %s -y %s -c %s  -e %s %s %s %sM %s" % (test_opt, mklv_cmd, lv_type, lv, copies, lv_policy, opts, vg, lv_size, pv_list)
+            cmd = f"{test_opt} {mklv_cmd} -t {lv_type} -y {lv} -c {copies}  -e {lv_policy} {opts} {vg} {lv_size}M {pv_list}"
+
             rc, out, err = module.run_command(cmd)
             if rc == 0:
-                module.exit_json(changed=True, msg="Logical volume %s created." % lv)
+                module.exit_json(changed=True, msg=f"Logical volume {lv} created.")
             else:
-                module.fail_json(msg="Creating logical volume %s failed." % lv, rc=rc, out=out, err=err)
-    else:
-        if state == 'absent':
-            # remove LV
-            rmlv_cmd = module.get_bin_path("rmlv", required=True)
-            rc, out, err = module.run_command("%s %s -f %s" % (test_opt, rmlv_cmd, this_lv['name']))
-            if rc == 0:
-                module.exit_json(changed=True, msg="Logical volume %s deleted." % lv)
-            else:
-                module.fail_json(msg="Failed to remove logical volume %s." % lv, rc=rc, out=out, err=err)
-        else:
-            if this_lv['policy'] != policy:
-                # change lv allocation policy
-                chlv_cmd = module.get_bin_path("chlv", required=True)
-                rc, out, err = module.run_command("%s %s -e %s %s" % (test_opt, chlv_cmd, lv_policy, this_lv['name']))
-                if rc == 0:
-                    module.exit_json(changed=True, msg="Logical volume %s policy changed: %s." % (lv, policy))
-                else:
-                    module.fail_json(msg="Failed to change logical volume %s policy." % lv, rc=rc, out=out, err=err)
+                module.fail_json(
+                    msg=f"Creating logical volume {lv} failed.",
+                    rc=rc,
+                    out=out,
+                    err=err,
+                )
 
-            if vg != this_lv['vg']:
-                module.fail_json(msg="Logical volume %s already exist in volume group %s" % (lv, this_lv['vg']))
+    elif state == 'absent':
+        # remove LV
+        rmlv_cmd = module.get_bin_path("rmlv", required=True)
+        rc, out, err = module.run_command(
+            f"{test_opt} {rmlv_cmd} -f {this_lv['name']}"
+        )
+
+        if rc == 0:
+            module.exit_json(changed=True, msg=f"Logical volume {lv} deleted.")
+        else:
+            module.fail_json(
+                msg=f"Failed to remove logical volume {lv}.",
+                rc=rc,
+                out=out,
+                err=err,
+            )
+
+    else:
+        if this_lv['policy'] != policy:
+            # change lv allocation policy
+            chlv_cmd = module.get_bin_path("chlv", required=True)
+            rc, out, err = module.run_command(
+                f"{test_opt} {chlv_cmd} -e {lv_policy} {this_lv['name']}"
+            )
+
+            if rc == 0:
+                module.exit_json(
+                    changed=True,
+                    msg=f"Logical volume {lv} policy changed: {policy}.",
+                )
+
+            else:
+                module.fail_json(
+                    msg=f"Failed to change logical volume {lv} policy.",
+                    rc=rc,
+                    out=out,
+                    err=err,
+                )
+
+
+        if vg != this_lv['vg']:
+            module.fail_json(
+                msg=f"Logical volume {lv} already exist in volume group {this_lv['vg']}"
+            )
+
 
             # from here the last remaining action is to resize it, if no size parameter is passed we do nothing.
-            if not size:
-                module.exit_json(changed=False, msg="Logical volume %s already exist." % (lv))
+        if not size:
+            module.exit_json(changed=False, msg=f"Logical volume {lv} already exist.")
 
             # resize LV based on absolute values
-            if int(lv_size) > this_lv['size']:
-                extendlv_cmd = module.get_bin_path("extendlv", required=True)
-                cmd = "%s %s %s %sM" % (test_opt, extendlv_cmd, lv, lv_size - this_lv['size'])
-                rc, out, err = module.run_command(cmd)
-                if rc == 0:
-                    module.exit_json(changed=True, msg="Logical volume %s size extended to %sMB." % (lv, lv_size))
-                else:
-                    module.fail_json(msg="Unable to resize %s to %sMB." % (lv, lv_size), rc=rc, out=out, err=err)
-            elif lv_size < this_lv['size']:
-                module.fail_json(msg="No shrinking of Logical Volume %s permitted. Current size: %s MB" % (lv, this_lv['size']))
+        if int(lv_size) > this_lv['size']:
+            extendlv_cmd = module.get_bin_path("extendlv", required=True)
+            cmd = f"{test_opt} {extendlv_cmd} {lv} {lv_size - this_lv['size']}M"
+            rc, out, err = module.run_command(cmd)
+            if rc == 0:
+                module.exit_json(
+                    changed=True,
+                    msg=f"Logical volume {lv} size extended to {lv_size}MB.",
+                )
+
             else:
-                module.exit_json(changed=False, msg="Logical volume %s size is already %sMB." % (lv, lv_size))
+                module.fail_json(
+                    msg=f"Unable to resize {lv} to {lv_size}MB.",
+                    rc=rc,
+                    out=out,
+                    err=err,
+                )
+
+        elif lv_size < this_lv['size']:
+            module.fail_json(
+                msg=f"No shrinking of Logical Volume {lv} permitted. Current size: {this_lv['size']} MB"
+            )
+
+        else:
+            module.exit_json(
+                changed=False,
+                msg=f"Logical volume {lv} size is already {lv_size}MB.",
+            )
 
 
 if __name__ == '__main__':

@@ -31,10 +31,10 @@ except Exception:
 
 
 def request(module, api_url, project, path, access_token, private_token, rawdata='', method='GET'):
-    url = "%s/v4/projects/%s%s" % (api_url, quote_plus(project), path)
+    url = f"{api_url}/v4/projects/{quote_plus(project)}{path}"
     headers = {}
     if access_token:
-        headers['Authorization'] = "Bearer %s" % access_token
+        headers['Authorization'] = f"Bearer {access_token}"
     else:
         headers['Private-Token'] = private_token
 
@@ -43,15 +43,13 @@ def request(module, api_url, project, path, access_token, private_token, rawdata
 
     response, info = fetch_url(module=module, url=url, headers=headers, data=rawdata, method=method)
     status = info['status']
-    content = ""
-    if response:
-        content = response.read()
+    content = response.read() if response else ""
     if status == 204:
         return True, content
-    elif status == 200 or status == 201:
+    elif status in [200, 201]:
         return True, json.loads(content)
     else:
-        return False, str(status) + ": " + content
+        return False, f"{str(status)}: {content}"
 
 
 def findProject(gitlab_instance, identifier):
@@ -60,7 +58,7 @@ def findProject(gitlab_instance, identifier):
     except Exception as e:
         current_user = gitlab_instance.user
         try:
-            project = gitlab_instance.projects.get(current_user.username + '/' + identifier)
+            project = gitlab_instance.projects.get(f'{current_user.username}/{identifier}')
         except Exception as e:
             return None
 
@@ -98,7 +96,7 @@ def gitlabAuthentication(module):
 
         gitlab_instance.auth()
     except (gitlab.exceptions.GitlabAuthenticationError, gitlab.exceptions.GitlabGetError) as e:
-        module.fail_json(msg="Failed to connect to GitLab server: %s" % to_native(e))
+        module.fail_json(msg=f"Failed to connect to GitLab server: {to_native(e)}")
     except (gitlab.exceptions.GitlabHttpError) as e:
         module.fail_json(msg="Failed to connect to GitLab server: %s. \
             GitLab remove Session API now that private tokens are removed from user API endpoints since version 10.2." % to_native(e))

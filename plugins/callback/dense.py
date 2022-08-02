@@ -209,14 +209,11 @@ class CallbackModule(CallbackModule_default):
         elif states.index(self.hosts[name]['state']) < states.index(status):
             self.hosts[name]['state'] = status
 
-        # Store delegated hostname, if needed
-        delegated_vars = result._result.get('_ansible_delegated_vars', None)
-        if delegated_vars:
+        if delegated_vars := result._result.get('_ansible_delegated_vars', None):
             self.hosts[name]['delegate'] = delegated_vars['ansible_host']
 
         # Print progress bar
         self._display_progress(result)
-
 #        # Ensure that tasks with changes/failures stay on-screen, and during diff-mode
 #        if status in ['changed', 'failed', 'unreachable'] or (result.get('_diff_mode', False) and result._resultget('diff', False)):
         # Ensure that tasks with changes/failures stay on-screen
@@ -236,9 +233,14 @@ class CallbackModule(CallbackModule_default):
 
         # Remove empty attributes (list, dict, str)
         for attr in result.copy():
-            if isinstance(result[attr], (MutableSequence, MutableMapping, binary_type, text_type)):
-                if not result[attr]:
-                    del(result[attr])
+            if (
+                isinstance(
+                    result[attr],
+                    (MutableSequence, MutableMapping, binary_type, text_type),
+                )
+                and not result[attr]
+            ):
+                del(result[attr])
 
     def _handle_exceptions(self, result):
         if 'exception' in result:
@@ -291,13 +293,9 @@ class CallbackModule(CallbackModule_default):
         self._clean_results(result._result)
 
         dump = ''
-        if result._task.action == 'include':
+        if result._task.action == 'include' or status == 'ok':
             return
-        elif status == 'ok':
-            return
-        elif status == 'ignored':
-            dump = self._handle_exceptions(result._result)
-        elif status == 'failed':
+        elif status in ['ignored', 'failed']:
             dump = self._handle_exceptions(result._result)
         elif status == 'unreachable':
             dump = result._result['msg']
@@ -310,13 +308,14 @@ class CallbackModule(CallbackModule_default):
         else:
             sys.stdout.write(colors[status] + status + ': ')
 
-            delegated_vars = result._result.get('_ansible_delegated_vars', None)
-            if delegated_vars:
+            if delegated_vars := result._result.get(
+                '_ansible_delegated_vars', None
+            ):
                 sys.stdout.write(vt100.reset + result._host.get_name() + '>' + colors[status] + delegated_vars['ansible_host'])
             else:
                 sys.stdout.write(result._host.get_name())
 
-            sys.stdout.write(': ' + dump + '\n')
+            sys.stdout.write(f': {dump}' + '\n')
             sys.stdout.write(vt100.reset + vt100.save + vt100.clearline)
             sys.stdout.flush()
 
@@ -482,16 +481,8 @@ class CallbackModule(CallbackModule_default):
         for h in hosts:
             t = stats.summarize(h)
             self._display.display(
-                u"%s : %s %s %s %s %s %s" % (
-                    hostcolor(h, t),
-                    colorize(u'ok', t['ok'], C.COLOR_OK),
-                    colorize(u'changed', t['changed'], C.COLOR_CHANGED),
-                    colorize(u'unreachable', t['unreachable'], C.COLOR_UNREACHABLE),
-                    colorize(u'failed', t['failures'], C.COLOR_ERROR),
-                    colorize(u'rescued', t['rescued'], C.COLOR_OK),
-                    colorize(u'ignored', t['ignored'], C.COLOR_WARN),
-                ),
-                screen_only=True
+                f"{hostcolor(h, t)} : {colorize(u'ok', t['ok'], C.COLOR_OK)} {colorize(u'changed', t['changed'], C.COLOR_CHANGED)} {colorize(u'unreachable', t['unreachable'], C.COLOR_UNREACHABLE)} {colorize(u'failed', t['failures'], C.COLOR_ERROR)} {colorize(u'rescued', t['rescued'], C.COLOR_OK)} {colorize(u'ignored', t['ignored'], C.COLOR_WARN)}",
+                screen_only=True,
             )
 
 

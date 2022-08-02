@@ -130,8 +130,7 @@ class CallbackModule(CallbackBase):
                 </checkresult>
             </checkresults>
         '''
-        xmldata = "<?xml version='1.0'?>\n"
-        xmldata += "<checkresults>\n"
+        xmldata = "<?xml version='1.0'?>\n" + "<checkresults>\n"
         xmldata += "<checkresult type='service'>\n"
         xmldata += "<hostname>%s</hostname>\n" % self.hostname
         xmldata += "<servicename>%s</servicename>\n" % self.servicename

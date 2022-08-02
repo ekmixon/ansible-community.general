@@ -57,9 +57,10 @@ def _exponential_backoff(retries=10, delay=2, backoff=2, max_delay=60):
         [2, 4, 8, 16, 32, 60, 60, 60, 60, 60]
     """
     def backoff_gen():
-        for retry in range(0, retries):
+        for retry in range(retries):
             sleep = delay * backoff ** retry
             yield sleep if max_delay is None else min(sleep, max_delay)
+
     return backoff_gen
 
 
@@ -86,8 +87,9 @@ def _full_jitter_backoff(retries=10, delay=3, max_delay=60, _random=random):
         [2, 1, 6, 6, 31]
     """
     def backoff_gen():
-        for retry in range(0, retries):
+        for retry in range(retries):
             yield _random.randint(0, min(max_delay, delay * 2 ** retry))
+
     return backoff_gen
 
 

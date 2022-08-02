@@ -831,18 +831,17 @@ class CallbackModule(Default):
         _callback_options = ['msg', 'msg_color']
 
         for option in _callback_options:
-            _option_name = '%s_%s' % (_callback_type, option)
+            _option_name = f'{_callback_type}_{option}'
             _option_template = variables.get(
-                self.DIY_NS + "_" + _option_name,
-                self.get_option(_option_name)
+                f"{self.DIY_NS}_{_option_name}", self.get_option(_option_name)
             )
-            _ret.update({option: self._template(
-                loader=loader,
-                template=_option_template,
-                variables=variables
-            )})
 
-        _ret.update({'vars': variables})
+            _ret[option] = self._template(
+                loader=loader, template=_option_template, variables=variables
+            )
+
+
+        _ret['vars'] = variables
 
         return _ret
 
@@ -870,7 +869,7 @@ class CallbackModule(Default):
                   handler=None, result=None, stats=None, remove_attr_ref_loop=True):
         def _get_value(obj, attr=None, method=None):
             if attr:
-                return getattr(obj, attr, getattr(obj, "_" + attr, None))
+                return getattr(obj, attr, getattr(obj, f"_{attr}", None))
 
             if method:
                 _method = getattr(obj, method)
@@ -898,9 +897,10 @@ class CallbackModule(Default):
         if play:
             _all = play.get_variable_manager().get_vars(
                 play=play,
-                host=(host if host else getattr(result, '_host', None)),
-                task=(handler if handler else task)
+                host=host or getattr(result, '_host', None),
+                task=handler or task,
             )
+
         _ret.update(_all)
 
         _ret.update(_ret.get(self.DIY_NS, {self.DIY_NS: CallbackDIYDict()}))

@@ -66,11 +66,7 @@ class CallbackModule(CallbackBase):
 
     def v2_playbook_on_play_start(self, play):
         name = play.get_name().strip()
-        if not name:
-            msg = u"play"
-        else:
-            msg = u"PLAY [%s]" % name
-
+        msg = f"PLAY [{name}]" if name else u"play"
         self._play = play
 
         self._display.banner(msg)
@@ -86,27 +82,17 @@ class CallbackModule(CallbackBase):
         for host in hosts:
             stat = stats.summarize(host)
 
-            self._display.display(u"%s : %s %s %s %s %s %s" % (
-                hostcolor(host, stat),
-                colorize(u'ok', stat['ok'], C.COLOR_OK),
-                colorize(u'changed', stat['changed'], C.COLOR_CHANGED),
-                colorize(u'unreachable', stat['unreachable'], C.COLOR_UNREACHABLE),
-                colorize(u'failed', stat['failures'], C.COLOR_ERROR),
-                colorize(u'rescued', stat['rescued'], C.COLOR_OK),
-                colorize(u'ignored', stat['ignored'], C.COLOR_WARN)),
-                screen_only=True
+            self._display.display(
+                f"{hostcolor(host, stat)} : {colorize(u'ok', stat['ok'], C.COLOR_OK)} {colorize(u'changed', stat['changed'], C.COLOR_CHANGED)} {colorize(u'unreachable', stat['unreachable'], C.COLOR_UNREACHABLE)} {colorize(u'failed', stat['failures'], C.COLOR_ERROR)} {colorize(u'rescued', stat['rescued'], C.COLOR_OK)} {colorize(u'ignored', stat['ignored'], C.COLOR_WARN)}",
+                screen_only=True,
             )
 
-            self._display.display(u"%s : %s %s %s %s %s %s" % (
-                hostcolor(host, stat, False),
-                colorize(u'ok', stat['ok'], None),
-                colorize(u'changed', stat['changed'], None),
-                colorize(u'unreachable', stat['unreachable'], None),
-                colorize(u'failed', stat['failures'], None),
-                colorize(u'rescued', stat['rescued'], None),
-                colorize(u'ignored', stat['ignored'], None)),
-                log_only=True
+
+            self._display.display(
+                f"{hostcolor(host, stat, False)} : {colorize(u'ok', stat['ok'], None)} {colorize(u'changed', stat['changed'], None)} {colorize(u'unreachable', stat['unreachable'], None)} {colorize(u'failed', stat['failures'], None)} {colorize(u'rescued', stat['rescued'], None)} {colorize(u'ignored', stat['ignored'], None)}",
+                log_only=True,
             )
+
 
         self._display.display("", screen_only=True)
 
@@ -139,12 +125,11 @@ class CallbackModule(CallbackBase):
         # (shoulder surfing, logging stdout straight to a file, etc).
         if not task.no_log and C.DISPLAY_ARGS_TO_STDOUT:
             args = ', '.join(('%s=%s' % a for a in task.args.items()))
-            args = ' %s' % args
+            args = f' {args}'
         self._display.banner("TASK %d/%d [%s%s]" % (self._task_counter, self._task_total, task.get_name().strip(), args))
         if self._display.verbosity >= 2:
-            path = task.get_path()
-            if path:
-                self._display.display("task path: %s" % path, color=C.COLOR_DEBUG)
+            if path := task.get_path():
+                self._display.display(f"task path: {path}", color=C.COLOR_DEBUG)
         self._host_counter = 0
         self._task_counter += 1
 
@@ -180,7 +165,7 @@ class CallbackModule(CallbackBase):
             self._clean_results(result._result, result._task.action)
 
             if self._run_is_verbose(result):
-                msg += " => %s" % (self._dump_results(result._result),)
+                msg += f" => {self._dump_results(result._result)}"
             self._display.display(msg, color=color)
 
     def v2_runner_on_failed(self, result, ignore_errors=False):
@@ -199,16 +184,15 @@ class CallbackModule(CallbackBase):
         if result._task.loop and 'results' in result._result:
             self._process_items(result)
 
+        elif delegated_vars:
+            self._display.display("fatal: %d/%d [%s -> %s]: FAILED! => %s" % (self._host_counter, self._host_total,
+                                                                              result._host.get_name(), delegated_vars['ansible_host'],
+                                                                              self._dump_results(result._result)),
+                                  color=C.COLOR_ERROR)
         else:
-            if delegated_vars:
-                self._display.display("fatal: %d/%d [%s -> %s]: FAILED! => %s" % (self._host_counter, self._host_total,
-                                                                                  result._host.get_name(), delegated_vars['ansible_host'],
-                                                                                  self._dump_results(result._result)),
-                                      color=C.COLOR_ERROR)
-            else:
-                self._display.display("fatal: %d/%d [%s]: FAILED! => %s" % (self._host_counter, self._host_total,
-                                                                            result._host.get_name(), self._dump_results(result._result)),
-                                      color=C.COLOR_ERROR)
+            self._display.display("fatal: %d/%d [%s]: FAILED! => %s" % (self._host_counter, self._host_total,
+                                                                        result._host.get_name(), self._dump_results(result._result)),
+                                  color=C.COLOR_ERROR)
 
         if ignore_errors:
             self._display.display("...ignoring", color=C.COLOR_SKIP)
@@ -228,7 +212,7 @@ class CallbackModule(CallbackBase):
             else:
                 msg = "skipping: %d/%d [%s]" % (self._host_counter, self._host_total, result._host.get_name())
                 if self._run_is_verbose(result):
-                    msg += " => %s" % self._dump_results(result._result)
+                    msg += f" => {self._dump_results(result._result)}"
                 self._display.display(msg, color=C.COLOR_SKIP)
 
     def v2_runner_on_unreachable(self, result):
@@ -237,8 +221,7 @@ class CallbackModule(CallbackBase):
         if self._play.strategy == 'free' and self._last_task_banner != result._task._uuid:
             self._print_task_banner(result._task)
 
-        delegated_vars = result._result.get('_ansible_delegated_vars', None)
-        if delegated_vars:
+        if delegated_vars := result._result.get('_ansible_delegated_vars', None):
             self._display.display("fatal: %d/%d [%s -> %s]: UNREACHABLE! => %s" % (self._host_counter, self._host_total,
                                                                                    result._host.get_name(), delegated_vars['ansible_host'],
                                                                                    self._dump_results(result._result)),

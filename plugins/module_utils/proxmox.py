@@ -51,7 +51,7 @@ def proxmox_auth_argument_spec():
 
 def proxmox_to_ansible_bool(value):
     '''Convert Proxmox representation of a boolean to be ansible-friendly'''
-    return True if value == 1 else False
+    return value == 1
 
 
 class ProxmoxAnsible(object):
@@ -63,7 +63,7 @@ class ProxmoxAnsible(object):
         try:
             self.proxmox_api.version.get()
         except Exception as e:
-            module.fail_json(msg='%s' % e, exception=traceback.format_exc())
+            module.fail_json(msg=f'{e}', exception=traceback.format_exc())
 
     def _connect(self):
         api_host = self.module.params['api_host']
@@ -83,4 +83,4 @@ class ProxmoxAnsible(object):
         try:
             return ProxmoxAPI(api_host, verify_ssl=validate_certs, **auth_args)
         except Exception as e:
-            self.module.fail_json(msg='%s' % e, exception=traceback.format_exc())
+            self.module.fail_json(msg=f'{e}', exception=traceback.format_exc())

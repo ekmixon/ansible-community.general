@@ -52,16 +52,16 @@ class IPAClient(object):
         self.use_gssapi = False
 
     def get_base_url(self):
-        return '%s://%s/ipa' % (self.protocol, self.host)
+        return f'{self.protocol}://{self.host}/ipa'
 
     def get_json_url(self):
-        return '%s/session/json' % self.get_base_url()
+        return f'{self.get_base_url()}/session/json'
 
     def login(self, username, password):
         if 'KRB5CCNAME' in os.environ and HAS_GSSAPI:
             self.use_gssapi = True
         elif 'KRB5_CLIENT_KTNAME' in os.environ and HAS_GSSAPI:
-            ccache = "MEMORY:" + str(uuid.uuid4())
+            ccache = f"MEMORY:{str(uuid.uuid4())}"
             os.environ['KRB5CCNAME'] = ccache
             self.use_gssapi = True
         else:
@@ -72,7 +72,7 @@ class IPAClient(object):
                            'GSSAPI. To use GSSAPI, please set the '
                            'KRB5_CLIENT_KTNAME or KRB5CCNAME (or both) '
                            ' environment variables.')
-            url = '%s/session/login_password' % self.get_base_url()
+            url = f'{self.get_base_url()}/session/login_password'
             data = 'user=%s&password=%s' % (quote(username, safe=''), quote(password, safe=''))
             headers = {'referer': self.get_base_url(),
                        'Content-Type': 'application/x-www-form-urlencoded',
@@ -87,27 +87,24 @@ class IPAClient(object):
             except Exception as e:
                 self._fail('login', to_native(e))
         if not self.headers:
-            self.headers = dict()
+            self.headers = {}
         self.headers.update({
             'referer': self.get_base_url(),
             'Content-Type': 'application/json',
             'Accept': 'application/json'})
 
     def _fail(self, msg, e):
-        if 'message' in e:
-            err_string = e.get('message')
-        else:
-            err_string = e
-        self.module.fail_json(msg='%s: %s' % (msg, err_string))
+        err_string = e.get('message') if 'message' in e else e
+        self.module.fail_json(msg=f'{msg}: {err_string}')
 
     def get_ipa_version(self):
         response = self.ping()['summary']
         ipa_ver_regex = re.compile(r'IPA server version (\d\.\d\.\d).*')
-        version_match = ipa_ver_regex.match(response)
-        ipa_version = None
-        if version_match:
-            ipa_version = version_match.groups()[0]
-        return ipa_version
+        return (
+            version_match.groups()[0]
+            if (version_match := ipa_ver_regex.match(response))
+            else None
+        )
 
     def ping(self):
         return self._post_json(method='ping', name=None)
@@ -115,7 +112,7 @@ class IPAClient(object):
     def _post_json(self, method, name, item=None):
         if item is None:
             item = {}
-        url = '%s/session/json' % self.get_base_url()
+        url = f'{self.get_base_url()}/session/json'
         data = dict(method=method)
 
         # TODO: We should probably handle this a little better.
@@ -133,30 +130,25 @@ class IPAClient(object):
             if status_code not in [200, 201, 204]:
                 self._fail(method, info['msg'])
         except Exception as e:
-            self._fail('post %s' % method, to_native(e))
+            self._fail(f'post {method}', to_native(e))
 
         if PY3:
             charset = resp.headers.get_content_charset('latin-1')
+        elif response_charset := resp.headers.getparam('charset'):
+            charset = response_charset
         else:
-            response_charset = resp.headers.getparam('charset')
-            if response_charset:
-                charset = response_charset
-            else:
-                charset = 'latin-1'
+            charset = 'latin-1'
         resp = json.loads(to_text(resp.read(), encoding=charset))
         err = resp.get('error')
         if err is not None:
-            self._fail('response %s' % method, err)
+            self._fail(f'response {method}', err)
 
         if 'result' in resp:
             result = resp.get('result')
             if 'result' in result:
                 result = result.get('result')
                 if isinstance(result, list):
-                    if len(result) > 0:
-                        return result[0]
-                    else:
-                        return {}
+                    return result[0] if len(result) > 0 else {}
             return result
         return None
 
@@ -164,10 +156,7 @@ class IPAClient(object):
         result = []
         for key in module_data.keys():
             mod_value = module_data.get(key, None)
-            if isinstance(mod_value, list):
-                default = []
-            else:
-                default = None
+            default = [] if isinstance(mod_value, list) else None
             ipa_value = ipa_data.get(key, default)
             if isinstance(ipa_value, list) and not isinstance(mod_value, list):
                 mod_value = [mod_value]
@@ -180,8 +169,7 @@ class IPAClient(object):
 
     def modify_if_diff(self, name, ipa_list, module_list, add_method, remove_method, item=None):
         changed = False
-        diff = list(set(ipa_list) - set(module_list))
-        if len(diff) > 0:
+        if diff := list(set(ipa_list) - set(module_list)):
             changed = True
             if not self.module.check_mode:
                 if item:
@@ -189,8 +177,7 @@ class IPAClient(object):
                 else:
                     remove_method(name=name, item=diff)
 
-        diff = list(set(module_list) - set(ipa_list))
-        if len(diff) > 0:
+        if diff := list(set(module_list) - set(ipa_list)):
             changed = True
             if not self.module.check_mode:
                 if item:

@@ -85,8 +85,7 @@ class AzureLogAnalyticsSource(object):
         hmac_sha256_sigs = hmac.new(
             decoded_shared_key, utf8_sigs, digestmod=hashlib.sha256).digest()
         encoded_hash = base64.b64encode(hmac_sha256_sigs).decode('utf-8')
-        signature = "SharedKey {0}:{1}".format(workspace_id, encoded_hash)
-        return signature
+        return "SharedKey {0}:{1}".format(workspace_id, encoded_hash)
 
     def __build_workspace_url(self, workspace_id):
         return "https://{0}.ods.opinsights.azure.com/api/logs?api-version=2016-04-01".format(workspace_id)
@@ -100,18 +99,16 @@ class AzureLogAnalyticsSource(object):
 
         if result._task_fields['args'].get('_ansible_version'):
             self.ansible_version = \
-                result._task_fields['args'].get('_ansible_version')
+                    result._task_fields['args'].get('_ansible_version')
 
-        if result._task._role:
-            ansible_role = str(result._task._role)
-        else:
-            ansible_role = None
+        ansible_role = str(result._task._role) if result._task._role else None
+        data = {
+            'uuid': result._task._uuid,
+            'session': self.session,
+            'status': state,
+            'timestamp': self.__rfc1123date(),
+        }
 
-        data = {}
-        data['uuid'] = result._task._uuid
-        data['session'] = self.session
-        data['status'] = state
-        data['timestamp'] = self.__rfc1123date()
         data['host'] = self.host
         data['user'] = self.user
         data['runtime'] = runtime

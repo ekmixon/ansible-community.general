@@ -140,7 +140,7 @@ class DimensionDataModule(object):
         if not user_id or not key:
             home = expanduser('~')
             config = configparser.RawConfigParser()
-            config.read("%s/.dimensiondata" % home)
+            config.read(f"{home}/.dimensiondata")
 
             try:
                 user_id = config.get("dimensiondatacloud", "MCP_USER")
@@ -164,10 +164,7 @@ class DimensionDataModule(object):
         """
 
         location = self.driver.ex_get_location_by_id(location)
-        if MCP_2_LOCATION_NAME_PATTERN.match(location.name):
-            return '2.0'
-
-        return '1.0'
+        return '2.0' if MCP_2_LOCATION_NAME_PATTERN.match(location.name) else '1.0'
 
     def get_network_domain(self, locator, location):
         """
@@ -176,16 +173,16 @@ class DimensionDataModule(object):
 
         if is_uuid(locator):
             network_domain = self.driver.ex_get_network_domain(locator)
+        elif matching_network_domains := [
+            network_domain
+            for network_domain in self.driver.ex_list_network_domains(
+                location=location
+            )
+            if network_domain.name == locator
+        ]:
+            network_domain = matching_network_domains[0]
         else:
-            matching_network_domains = [
-                network_domain for network_domain in self.driver.ex_list_network_domains(location=location)
-                if network_domain.name == locator
-            ]
-
-            if matching_network_domains:
-                network_domain = matching_network_domains[0]
-            else:
-                network_domain = None
+            network_domain = None
 
         if network_domain:
             return network_domain
@@ -198,16 +195,14 @@ class DimensionDataModule(object):
         """
         if is_uuid(locator):
             vlan = self.driver.ex_get_vlan(locator)
+        elif matching_vlans := [
+            vlan
+            for vlan in self.driver.ex_list_vlans(location, network_domain)
+            if vlan.name == locator
+        ]:
+            vlan = matching_vlans[0]
         else:
-            matching_vlans = [
-                vlan for vlan in self.driver.ex_list_vlans(location, network_domain)
-                if vlan.name == locator
-            ]
-
-            if matching_vlans:
-                vlan = matching_vlans[0]
-            else:
-                vlan = None
+            vlan = None
 
         if vlan:
             return vlan
@@ -231,7 +226,7 @@ class DimensionDataModule(object):
         )
 
         if additional_argument_spec:
-            spec.update(additional_argument_spec)
+            spec |= additional_argument_spec
 
         return spec
 
@@ -312,10 +307,7 @@ def get_dd_regions():
     # Get endpoints
     all_regions = API_ENDPOINTS.keys()
 
-    # Only Dimension Data endpoints (no prefix)
-    regions = [region[3:] for region in all_regions if region.startswith('dd-')]
-
-    return regions
+    return [region[3:] for region in all_regions if region.startswith('dd-')]
 
 
 def is_uuid(u, version=4):

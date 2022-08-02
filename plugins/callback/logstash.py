@@ -127,36 +127,37 @@ class CallbackModule(CallbackBase):
         self.start_time = datetime.utcnow()
 
     def _init_plugin(self):
-        if not self.disabled:
-            self.logger = logging.getLogger('python-logstash-logger')
-            self.logger.setLevel(logging.DEBUG)
+        if self.disabled:
+            return
+        self.logger = logging.getLogger('python-logstash-logger')
+        self.logger.setLevel(logging.DEBUG)
 
-            self.handler = logstash.TCPLogstashHandler(
-                self.ls_server,
-                self.ls_port,
-                version=1,
-                message_type=self.ls_type
-            )
+        self.handler = logstash.TCPLogstashHandler(
+            self.ls_server,
+            self.ls_port,
+            version=1,
+            message_type=self.ls_type
+        )
 
-            self.logger.addHandler(self.handler)
-            self.hostname = socket.gethostname()
-            self.session = str(uuid.uuid4())
-            self.errors = 0
+        self.logger.addHandler(self.handler)
+        self.hostname = socket.gethostname()
+        self.session = str(uuid.uuid4())
+        self.errors = 0
 
-            self.base_data = {
-                'session': self.session,
-                'host': self.hostname
-            }
+        self.base_data = {
+            'session': self.session,
+            'host': self.hostname
+        }
 
-            if self.ls_pre_command is not None:
-                self.base_data['ansible_pre_command_output'] = os.popen(
-                    self.ls_pre_command).read()
+        if self.ls_pre_command is not None:
+            self.base_data['ansible_pre_command_output'] = os.popen(
+                self.ls_pre_command).read()
 
-            if self._options is not None:
-                self.base_data['ansible_checkmode'] = self._options.check
-                self.base_data['ansible_tags'] = self._options.tags
-                self.base_data['ansible_skip_tags'] = self._options.skip_tags
-                self.base_data['inventory'] = self._options.inventory
+        if self._options is not None:
+            self.base_data['ansible_checkmode'] = self._options.check
+            self.base_data['ansible_tags'] = self._options.tags
+            self.base_data['ansible_skip_tags'] = self._options.skip_tags
+            self.base_data['inventory'] = self._options.inventory
 
     def set_options(self, task_keys=None, var_options=None, direct=None):
         super(CallbackModule, self).set_options(task_keys=task_keys, var_options=var_options, direct=direct)
@@ -185,15 +186,11 @@ class CallbackModule(CallbackBase):
     def v2_playbook_on_stats(self, stats):
         end_time = datetime.utcnow()
         runtime = end_time - self.start_time
-        summarize_stat = {}
-        for host in stats.processed.keys():
-            summarize_stat[host] = stats.summarize(host)
+        summarize_stat = {
+            host: stats.summarize(host) for host in stats.processed.keys()
+        }
 
-        if self.errors == 0:
-            status = "OK"
-        else:
-            status = "FAILED"
-
+        status = "OK" if self.errors == 0 else "FAILED"
         data = self.base_data.copy()
         data['ansible_type'] = "finish"
         data['status'] = status

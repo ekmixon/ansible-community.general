@@ -60,14 +60,14 @@ class Connection(ConnectionBase):
         self.zlogin_cmd = to_bytes(self._search_executable('zlogin'))
 
         if self.zone not in self.list_zones():
-            raise AnsibleError("incorrect zone name %s" % self.zone)
+            raise AnsibleError(f"incorrect zone name {self.zone}")
 
     @staticmethod
     def _search_executable(executable):
-        cmd = distutils.spawn.find_executable(executable)
-        if not cmd:
-            raise AnsibleError("%s command not found in PATH" % executable)
-        return cmd
+        if cmd := distutils.spawn.find_executable(executable):
+            return cmd
+        else:
+            raise AnsibleError(f"{executable} command not found in PATH")
 
     def list_zones(self):
         process = subprocess.Popen([self.zoneadm_cmd, 'list', '-ip'],
@@ -92,7 +92,7 @@ class Connection(ConnectionBase):
 
         # stdout, stderr = p.communicate()
         path = process.stdout.readlines()[0].split(':')[3]
-        return path + '/root'
+        return f'{path}/root'
 
     def _connect(self):
         """ connect to the zone; nothing to do here """
@@ -115,11 +115,14 @@ class Connection(ConnectionBase):
         local_cmd = [self.zlogin_cmd, self.zone, cmd]
         local_cmd = map(to_bytes, local_cmd)
 
-        display.vvv("EXEC %s" % (local_cmd), host=self.zone)
-        p = subprocess.Popen(local_cmd, shell=False, stdin=stdin,
-                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-        return p
+        display.vvv(f"EXEC {local_cmd}", host=self.zone)
+        return subprocess.Popen(
+            local_cmd,
+            shell=False,
+            stdin=stdin,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
 
     def exec_command(self, cmd, in_data=None, sudoable=False):
         """ run a command on the zone """
@@ -147,49 +150,47 @@ class Connection(ConnectionBase):
     def put_file(self, in_path, out_path):
         """ transfer a file from local to zone """
         super(Connection, self).put_file(in_path, out_path)
-        display.vvv("PUT %s TO %s" % (in_path, out_path), host=self.zone)
+        display.vvv(f"PUT {in_path} TO {out_path}", host=self.zone)
 
         out_path = shlex_quote(self._prefix_login_path(out_path))
         try:
             with open(in_path, 'rb') as in_file:
-                if not os.fstat(in_file.fileno()).st_size:
-                    count = ' count=0'
-                else:
-                    count = ''
+                count = '' if os.fstat(in_file.fileno()).st_size else ' count=0'
                 try:
-                    p = self._buffered_exec_command('dd of=%s bs=%s%s' % (out_path, BUFSIZE, count), stdin=in_file)
+                    p = self._buffered_exec_command(
+                        f'dd of={out_path} bs={BUFSIZE}{count}', stdin=in_file
+                    )
+
                 except OSError:
                     raise AnsibleError("jail connection requires dd command in the jail")
                 try:
                     stdout, stderr = p.communicate()
                 except Exception:
                     traceback.print_exc()
-                    raise AnsibleError("failed to transfer file %s to %s" % (in_path, out_path))
+                    raise AnsibleError(f"failed to transfer file {in_path} to {out_path}")
                 if p.returncode != 0:
                     raise AnsibleError("failed to transfer file %s to %s:\n%s\n%s" % (in_path, out_path, stdout, stderr))
         except IOError:
-            raise AnsibleError("file or module does not exist at: %s" % in_path)
+            raise AnsibleError(f"file or module does not exist at: {in_path}")
 
     def fetch_file(self, in_path, out_path):
         """ fetch a file from zone to local """
         super(Connection, self).fetch_file(in_path, out_path)
-        display.vvv("FETCH %s TO %s" % (in_path, out_path), host=self.zone)
+        display.vvv(f"FETCH {in_path} TO {out_path}", host=self.zone)
 
         in_path = shlex_quote(self._prefix_login_path(in_path))
         try:
-            p = self._buffered_exec_command('dd if=%s bs=%s' % (in_path, BUFSIZE))
+            p = self._buffered_exec_command(f'dd if={in_path} bs={BUFSIZE}')
         except OSError:
             raise AnsibleError("zone connection requires dd command in the zone")
 
         with open(out_path, 'wb+') as out_file:
             try:
-                chunk = p.stdout.read(BUFSIZE)
-                while chunk:
+                while chunk := p.stdout.read(BUFSIZE):
                     out_file.write(chunk)
-                    chunk = p.stdout.read(BUFSIZE)
             except Exception:
                 traceback.print_exc()
-                raise AnsibleError("failed to transfer file %s to %s" % (in_path, out_path))
+                raise AnsibleError(f"failed to transfer file {in_path} to {out_path}")
             stdout, stderr = p.communicate()
             if p.returncode != 0:
                 raise AnsibleError("failed to transfer file %s to %s:\n%s\n%s" % (in_path, out_path, stdout, stderr))

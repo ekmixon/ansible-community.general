@@ -29,10 +29,11 @@ class ModuleHelper(VarsMixin, DependencyMixin, ModuleHelperBase):
         super(ModuleHelper, self).__init__(module)
         for name, value in self.module.params.items():
             self.vars.set(
-                name, value,
+                name,
+                value,
                 diff=name in self.diff_params,
                 output=name in self.output_params,
-                change=None if not self.change_params else name in self.change_params,
+                change=name in self.change_params if self.change_params else None,
                 fact=name in self.facts_params,
             )
 
@@ -62,7 +63,7 @@ class ModuleHelper(VarsMixin, DependencyMixin, ModuleHelperBase):
 
         for varname in result:
             if varname in self._output_conflict_list:
-                result["_" + varname] = result[varname]
+                result[f"_{varname}"] = result[varname]
                 del result[varname]
         return result
 

@@ -83,19 +83,21 @@ class UTM:
         self.module.params['url_password'] = module.params.get('utm_token')
         if all(elem in self.change_relevant_keys for elem in module.params.keys()):
             raise UTMModuleConfigurationError(
-                "The keys " + to_native(
-                    self.change_relevant_keys) + " to check are not in the modules keys:\n" + to_native(
-                    list(module.params.keys())))
+                (
+                    f"The keys {to_native(self.change_relevant_keys)}"
+                    + " to check are not in the modules keys:\n"
+                )
+                + to_native(list(module.params.keys()))
+            )
 
     def execute(self):
         try:
-            if not self.info_only:
-                if self.module.params.get('state') == 'present':
-                    self._add()
-                elif self.module.params.get('state') == 'absent':
-                    self._remove()
-            else:
+            if self.info_only:
                 self._info()
+            elif self.module.params.get('state') == 'present':
+                self._add()
+            elif self.module.params.get('state') == 'absent':
+                self._remove()
         except Exception as e:
             self.module.fail_json(msg=to_native(e))
 
@@ -106,11 +108,10 @@ class UTM:
         info, result = self._lookup_entry(self.module, self.request_url)
         if info["status"] >= 400:
             self.module.fail_json(result=json.loads(info))
+        elif result is None:
+            self.module.exit_json(changed=False)
         else:
-            if result is None:
-                self.module.exit_json(changed=False)
-            else:
-                self.module.exit_json(result=result, changed=False)
+            self.module.exit_json(result=result, changed=False)
 
     def _add(self):
         """
@@ -133,15 +134,14 @@ class UTM:
                     self.module.fail_json(msg=json.loads(info["body"]))
                 is_changed = True
                 result = self._clean_result(json.loads(response.read()))
-            else:
-                if self._is_object_changed(self.change_relevant_keys, self.module, result):
-                    response, info = fetch_url(self.module, self.request_url + result['_ref'], method="PUT",
-                                               headers=combined_headers,
-                                               data=data_as_json_string)
-                    if info['status'] >= 400:
-                        self.module.fail_json(msg=json.loads(info["body"]))
-                    is_changed = True
-                    result = self._clean_result(json.loads(response.read()))
+            elif self._is_object_changed(self.change_relevant_keys, self.module, result):
+                response, info = fetch_url(self.module, self.request_url + result['_ref'], method="PUT",
+                                           headers=combined_headers,
+                                           data=data_as_json_string)
+                if info['status'] >= 400:
+                    self.module.fail_json(msg=json.loads(info["body"]))
+                is_changed = True
+                result = self._clean_result(json.loads(response.read()))
             self.module.exit_json(result=result, changed=is_changed)
 
     def _combine_headers(self):
@@ -152,7 +152,7 @@ class UTM:
         default_headers = {"Accept": "application/json", "Content-type": "application/json"}
         if self.module.params.get('headers') is not None:
             result = default_headers.copy()
-            result.update(self.module.params.get('headers'))
+            result |= self.module.params.get('headers')
         else:
             result = default_headers
         return result
@@ -211,7 +211,4 @@ class UTM:
         :param result: The result from the query
         :return:
         """
-        for key in keys:
-            if module.params.get(key) != result[key]:
-                return True
-        return False
+        return any(module.params.get(key) != result[key] for key in keys)

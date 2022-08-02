@@ -32,8 +32,10 @@ def random_mac(value, seed=None):
         to get a complete 6 bytes MAC address '''
 
     if not isinstance(value, string_types):
-        raise AnsibleFilterError('Invalid value type (%s) for random_mac (%s)' %
-                                 (type(value), value))
+        raise AnsibleFilterError(
+            f'Invalid value type ({type(value)}) for random_mac ({value})'
+        )
+
 
     value = value.lower()
     mac_items = value.split(':')
@@ -48,16 +50,11 @@ def random_mac(value, seed=None):
             err += ",empty item"
             continue
         if not re.match('[a-f0-9]{2}', mac):
-            err += ",%s not hexa byte" % mac
-    err = err.strip(',')
+            err += f",{mac} not hexa byte"
+    if err := err.strip(','):
+        raise AnsibleFilterError(f'Invalid value ({value}) for random_mac: {err}')
 
-    if err:
-        raise AnsibleFilterError('Invalid value (%s) for random_mac: %s' % (value, err))
-
-    if seed is None:
-        r = SystemRandom()
-    else:
-        r = Random(seed)
+    r = SystemRandom() if seed is None else Random(seed)
     # Generate random int between x1000000000 and xFFFFFFFFFF
     v = r.randint(68719476736, 1099511627775)
     # Select first n chars to complement input prefix

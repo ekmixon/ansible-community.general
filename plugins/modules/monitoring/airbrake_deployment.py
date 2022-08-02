@@ -152,7 +152,7 @@ def main():
     response, info = fetch_url(module, url, data=json_body,
                                headers=headers, method='POST')
 
-    if info['status'] == 200 or info['status'] == 201:
+    if info['status'] in [200, 201]:
         module.exit_json(changed=True)
     else:
         module.fail_json(msg="HTTP result code: %d connecting to %s" % (info['status'], url))

@@ -32,10 +32,10 @@ def is_ssh_url(url):
 
     if "@" in url and "://" not in url:
         return True
-    for scheme in "ssh://", "git+ssh://", "ssh+git://":
-        if url.startswith(scheme):
-            return True
-    return False
+    return any(
+        url.startswith(scheme)
+        for scheme in ("ssh://", "git+ssh://", "ssh+git://")
+    )
 
 
 def get_fqdn_and_port(repo_url):
@@ -48,9 +48,7 @@ def get_fqdn_and_port(repo_url):
     if "@" in repo_url and "://" not in repo_url:
         # most likely an user@host:path or user@host/path type URL
         repo_url = repo_url.split("@", 1)[1]
-        match = ipv6_re.match(repo_url)
-        # For this type of URL, colon specifies the path, not the port
-        if match:
+        if match := ipv6_re.match(repo_url):
             fqdn, path = match.groups()
         elif ":" in repo_url:
             fqdn = repo_url.split(":")[0]
@@ -65,11 +63,10 @@ def get_fqdn_and_port(repo_url):
             fqdn = parts[1]
             if "@" in fqdn:
                 fqdn = fqdn.split("@", 1)[1]
-            match = ipv6_re.match(fqdn)
-            if match:
+            if match := ipv6_re.match(fqdn):
                 fqdn, port = match.groups()
             elif ":" in fqdn:
-                fqdn, port = fqdn.split(":")[0:2]
+                fqdn, port = fqdn.split(":")[:2]
     return fqdn, port
 
 
@@ -125,10 +122,8 @@ def not_in_host_file(self, host):
                 except Exception:
                     # invalid hashed host key, skip it
                     continue
-            else:
-                # standard host file entry
-                if host in tokens[0]:
-                    return False
+            elif host in tokens[0]:
+                return False
 
     return True
 
@@ -152,28 +147,29 @@ def add_host_key(module, fqdn, port=22, key_type="rsa", create_dir=False):
             try:
                 os.makedirs(user_ssh_dir, int('700', 8))
             except Exception:
-                module.fail_json(msg="failed to create host key directory: %s" % user_ssh_dir)
+                module.fail_json(msg=f"failed to create host key directory: {user_ssh_dir}")
         else:
-            module.fail_json(msg="%s does not exist" % user_ssh_dir)
+            module.fail_json(msg=f"{user_ssh_dir} does not exist")
     elif not os.path.isdir(user_ssh_dir):
-        module.fail_json(msg="%s is not a directory" % user_ssh_dir)
+        module.fail_json(msg=f"{user_ssh_dir} is not a directory")
 
     if port:
-        this_cmd = "%s -t %s -p %s %s" % (keyscan_cmd, key_type, port, fqdn)
+        this_cmd = f"{keyscan_cmd} -t {key_type} -p {port} {fqdn}"
     else:
-        this_cmd = "%s -t %s %s" % (keyscan_cmd, key_type, fqdn)
+        this_cmd = f"{keyscan_cmd} -t {key_type} {fqdn}"
 
     rc, out, err = module.run_command(this_cmd)
     # ssh-keyscan gives a 0 exit code and prints nothing on timeout
     if rc != 0 or not out:
         msg = 'failed to retrieve hostkey'
-        if not out:
-            msg += '. "%s" returned no matches.' % this_cmd
-        else:
-            msg += ' using command "%s". [stdout]: %s' % (this_cmd, out)
+        msg += (
+            ' using command "%s". [stdout]: %s' % (this_cmd, out)
+            if out
+            else '. "%s" returned no matches.' % this_cmd
+        )
 
         if err:
-            msg += ' [stderr]: %s' % err
+            msg += f' [stderr]: {err}'
 
         module.fail_json(msg=msg)
 

@@ -58,9 +58,9 @@ class Connection(ConnectionBase):
         if in_data:
             raise errors.AnsibleError("Internal Error: this module does not support optimized module pipelining")
 
-        self._display.vvv("EXEC %s" % cmd, host=self.host)
+        self._display.vvv(f"EXEC {cmd}", host=self.host)
         # need to add 'true;' to work around https://github.com/saltstack/salt/issues/28077
-        res = self.client.cmd(self.host, 'cmd.exec_code_all', ['bash', 'true;' + cmd])
+        res = self.client.cmd(self.host, 'cmd.exec_code_all', ['bash', f'true;{cmd}'])
         if self.host not in res:
             raise errors.AnsibleError("Minion %s didn't answer, check if salt-minion is running and the name is correct" % self.host)
 
@@ -80,7 +80,7 @@ class Connection(ConnectionBase):
         super(Connection, self).put_file(in_path, out_path)
 
         out_path = self._normalize_path(out_path, '/')
-        self._display.vvv("PUT %s TO %s" % (in_path, out_path), host=self.host)
+        self._display.vvv(f"PUT {in_path} TO {out_path}", host=self.host)
         with open(in_path, 'rb') as in_fh:
             content = in_fh.read()
         self.client.cmd(self.host, 'hashutil.base64_decodefile', [base64.b64encode(content), out_path])
@@ -92,7 +92,7 @@ class Connection(ConnectionBase):
         super(Connection, self).fetch_file(in_path, out_path)
 
         in_path = self._normalize_path(in_path, '/')
-        self._display.vvv("FETCH %s TO %s" % (in_path, out_path), host=self.host)
+        self._display.vvv(f"FETCH {in_path} TO {out_path}", host=self.host)
         content = self.client.cmd(self.host, 'cp.get_file_str', [in_path])[self.host]
         open(out_path, 'wb').write(content)
 

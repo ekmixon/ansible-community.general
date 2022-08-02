@@ -254,8 +254,7 @@ class InventoryModule(BaseInventoryPlugin):
         urls = (url for url in url_list if self.validate_url(url))
         for url in urls:
             try:
-                socket_connection = LXDClient(url, self.client_key, self.client_cert, self.debug)
-                return socket_connection
+                return LXDClient(url, self.client_key, self.client_cert, self.debug)
             except LXDClientException as err:
                 error_storage[url] = err
         raise AnsibleError('No connection to the socket: {0}'.format(to_native(error_storage)))
@@ -322,12 +321,23 @@ class InventoryModule(BaseInventoryPlugin):
             None
         Returns:
             dict(config): Config of the container"""
-        config = {}
-        if isinstance(branch, (tuple, list)):
-            config[name] = {branch[1]: self.socket.do('GET', '/1.0/{0}/{1}/{2}'.format(to_native(branch[0]), to_native(name), to_native(branch[1])))}
-        else:
-            config[name] = {branch: self.socket.do('GET', '/1.0/{0}/{1}'.format(to_native(branch), to_native(name)))}
-        return config
+        return {
+            name: {
+                branch[1]: self.socket.do(
+                    'GET',
+                    '/1.0/{0}/{1}/{2}'.format(
+                        to_native(branch[0]), to_native(name), to_native(branch[1])
+                    ),
+                )
+            }
+            if isinstance(branch, (tuple, list))
+            else {
+                branch: self.socket.do(
+                    'GET',
+                    '/1.0/{0}/{1}'.format(to_native(branch), to_native(name)),
+                )
+            }
+        }
 
     def get_container_data(self, names):
         """Create Inventory of the container
@@ -398,8 +408,7 @@ class InventoryModule(BaseInventoryPlugin):
                 gen_address = [address for address in container_network_interfaces[interface_name]['addresses'] if address.get('scope') != 'link']
                 network_configuration[interface_name] = []
                 for address in gen_address:
-                    address_set = {}
-                    address_set['family'] = address.get('family')
+                    address_set = {'family': address.get('family')}
                     address_set['address'] = address.get('address')
                     address_set['netmask'] = address.get('netmask')
                     address_set['combined'] = address.get('address') + '/' + address.get('netmask')
@@ -424,10 +433,7 @@ class InventoryModule(BaseInventoryPlugin):
         if container_network_interfaces:  # container have network interfaces
             # generator if interfaces which start with the desired pattern
             net_generator = [interface for interface in container_network_interfaces if interface.startswith(self.prefered_container_network_interface)]
-            selected_interfaces = []  # init
-            for interface in net_generator:
-                selected_interfaces.append(interface)
-            if len(selected_interfaces) > 0:
+            if selected_interfaces := list(net_generator):
                 prefered_interface = sorted(selected_interfaces)[0]
         return prefered_interface
 
@@ -445,23 +451,27 @@ class InventoryModule(BaseInventoryPlugin):
         Returns:
             None"""
         # get network device configuration and store {network: vlan_id}
-        network_vlans = {}
-        for network in self._get_data_entry('networks'):
-            if self._get_data_entry('state/metadata/vlan/vid', data=self.data['networks'].get(network)):
-                network_vlans[network] = self._get_data_entry('state/metadata/vlan/vid', data=self.data['networks'].get(network))
+        network_vlans = {
+            network: self._get_data_entry(
+                'state/metadata/vlan/vid', data=self.data['networks'].get(network)
+            )
+            for network in self._get_data_entry('networks')
+            if self._get_data_entry(
+                'state/metadata/vlan/vid', data=self.data['networks'].get(network)
+            )
+        }
 
-        # get networkdevices of container and return
-        # e.g.
-        # "eth0":{ "name":"eth0",
-        #          "network":"lxdbr0",
-        #          "type":"nic"},
-        vlan_ids = {}
         devices = self._get_data_entry('containers/{0}/containers/metadata/expanded_devices'.format(to_native(container_name)))
-        for device in devices:
-            if 'network' in devices[device]:
-                if devices[device]['network'] in network_vlans:
-                    vlan_ids[devices[device].get('network')] = network_vlans[devices[device].get('network')]
-        return vlan_ids if vlan_ids else None
+        vlan_ids = {
+            devices[device].get('network'): network_vlans[
+                devices[device].get('network')
+            ]
+            for device in devices
+            if 'network' in devices[device]
+            and devices[device]['network'] in network_vlans
+        }
+
+        return vlan_ids or None
 
     def _get_data_entry(self, path, data=None, delimiter='/'):
         """Helper to get data
@@ -628,9 +638,14 @@ class InventoryModule(BaseInventoryPlugin):
             None"""
         for container_name in self.data['inventory']:
             # Only consider containers that match the "state" filter, if self.state is not None
-            if self.filter:
-                if self.filter.lower() != self._get_data_entry('inventory/{0}/state'.format(container_name)).lower():
-                    continue
+            if (
+                self.filter
+                and self.filter.lower()
+                != self._get_data_entry(
+                    'inventory/{0}/state'.format(container_name)
+                ).lower()
+            ):
+                continue
             # add container
             self.inventory.add_host(container_name)
             # add network informations
@@ -687,8 +702,7 @@ class InventoryModule(BaseInventoryPlugin):
         regex_pattern = self.groupby[group_name].get('attribute')
 
         for container_name in self.inventory.hosts:
-            result = re.search(regex_pattern, container_name)
-            if result:
+            if result := re.search(regex_pattern, container_name):
                 self.inventory.add_child(group_name, container_name)
 
     def build_inventory_groups_network_range(self, group_name):

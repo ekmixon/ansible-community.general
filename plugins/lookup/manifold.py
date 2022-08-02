@@ -105,9 +105,8 @@ class ManifoldApiClient(object):
         url = self.base_url.format(api=api, endpoint=endpoint)
 
         headers = default_headers
-        arg_headers = kwargs.pop('headers', None)
-        if arg_headers:
-            headers.update(arg_headers)
+        if arg_headers := kwargs.pop('headers', None):
+            headers |= arg_headers
 
         try:
             display.vvvv('manifold lookup connecting to {0}'.format(url))
@@ -152,7 +151,7 @@ class ManifoldApiClient(object):
             query_params['label'] = label
 
         if query_params:
-            endpoint += '?' + urlencode(query_params)
+            endpoint += f'?{urlencode(query_params)}'
 
         return self.request(api, endpoint)
 
@@ -188,7 +187,7 @@ class ManifoldApiClient(object):
             query_params['label'] = label
 
         if query_params:
-            endpoint += '?' + urlencode(query_params)
+            endpoint += f'?{urlencode(query_params)}'
 
         return self.request(api, endpoint)
 
@@ -268,8 +267,7 @@ class LookupModule(LookupBase):
                         credentials[cred_key] = cred_val
                         cred_map[cred_key] = label
 
-            ret = [credentials]
-            return ret
+            return [credentials]
         except ApiError as e:
             raise AnsibleError('API Error: {0}'.format(str(e)))
         except AnsibleError as e:

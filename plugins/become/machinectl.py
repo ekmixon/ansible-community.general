@@ -85,4 +85,4 @@ class BecomeModule(BecomeBase):
 
         flags = self.get_option('become_flags')
         user = self.get_option('become_user')
-        return '%s -q shell %s %s@ %s' % (become, flags, user, cmd)
+        return f'{become} -q shell {flags} {user}@ {cmd}'

@@ -141,7 +141,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                 cmd.append('-4')
             elif self._options['ipv6'] and not self._options['ipv4']:
                 cmd.append('-6')
-            elif not self._options['ipv6'] and not self._options['ipv4']:
+            elif not self._options['ipv6']:
                 raise AnsibleParserError('One of ipv4 or ipv6 must be enabled for this plugin')
 
             if self._options['exclude']:
@@ -154,7 +154,10 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                 p = Popen(cmd, stdout=PIPE, stderr=PIPE)
                 stdout, stderr = p.communicate()
                 if p.returncode != 0:
-                    raise AnsibleParserError('Failed to run nmap, rc=%s: %s' % (p.returncode, to_native(stderr)))
+                    raise AnsibleParserError(
+                        f'Failed to run nmap, rc={p.returncode}: {to_native(stderr)}'
+                    )
+
 
                 # parse results
                 host = None
@@ -165,11 +168,13 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                 try:
                     t_stdout = to_text(stdout, errors='surrogate_or_strict')
                 except UnicodeError as e:
-                    raise AnsibleParserError('Invalid (non unicode) input returned: %s' % to_native(e))
+                    raise AnsibleParserError(
+                        f'Invalid (non unicode) input returned: {to_native(e)}'
+                    )
+
 
                 for line in t_stdout.splitlines():
-                    hits = self.find_host.match(line)
-                    if hits:
+                    if hits := self.find_host.match(line):
                         if host is not None and ports:
                             results[-1]['ports'] = ports
 
@@ -180,14 +185,10 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                             host = hits.group(1)
 
                         # if no reverse dns exists, just use ip instead as hostname
-                        if hits.group(2) is not None:
-                            ip = hits.group(2)
-                        else:
-                            ip = hits.group(1)
-
+                        ip = hits.group(2) if hits.group(2) is not None else hits.group(1)
                         if host is not None:
                             # update inventory
-                            results.append(dict())
+                            results.append({})
                             results[-1]['name'] = host
                             results[-1]['ip'] = ip
                             ports = []
@@ -206,7 +207,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                     results[-1]['ports'] = ports
 
             except Exception as e:
-                raise AnsibleParserError("failed to parse %s: %s " % (to_native(path), to_native(e)))
+                raise AnsibleParserError(f"failed to parse {to_native(path)}: {to_native(e)} ")
 
         if cache_needs_update:
             self._cache[cache_key] = results

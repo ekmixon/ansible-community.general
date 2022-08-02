@@ -85,8 +85,7 @@ class BitbucketHelper:
         content = {}
 
         if response is not None:
-            body = to_text(response.read())
-            if body:
+            if body := to_text(response.read()):
                 content = json.loads(body)
 
         return info, content

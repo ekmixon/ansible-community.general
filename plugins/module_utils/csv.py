@@ -26,7 +26,8 @@ CSVError = csv.Error
 
 
 def initialize_dialect(dialect, **kwargs):
-    # Add Unix dialect from Python 3
+# Add Unix dialect from Python 3
+
     class unix_dialect(csv.Dialect):
         """Describe the usual properties of Unix-generated CSV files."""
         delimiter = ','
@@ -41,13 +42,14 @@ def initialize_dialect(dialect, **kwargs):
     if dialect not in csv.list_dialects():
         raise DialectNotAvailableError("Dialect '%s' is not supported by your version of python." % dialect)
 
-    # Create a dictionary from only set options
-    dialect_params = dict((k, v) for k, v in kwargs.items() if v is not None)
-    if dialect_params:
+    if dialect_params := {k: v for k, v in kwargs.items() if v is not None}:
         try:
             csv.register_dialect('custom', dialect, **dialect_params)
         except TypeError as e:
-            raise CustomDialectFailureError("Unable to create custom dialect: %s" % to_native(e))
+            raise CustomDialectFailureError(
+                f"Unable to create custom dialect: {to_native(e)}"
+            )
+
         dialect = 'custom'
 
     return dialect
@@ -57,11 +59,5 @@ def read_csv(data, dialect, fieldnames=None):
 
     data = to_native(data, errors='surrogate_or_strict')
 
-    if PY3:
-        fake_fh = StringIO(data)
-    else:
-        fake_fh = BytesIO(data)
-
-    reader = csv.DictReader(fake_fh, fieldnames=fieldnames, dialect=dialect)
-
-    return reader
+    fake_fh = StringIO(data) if PY3 else BytesIO(data)
+    return csv.DictReader(fake_fh, fieldnames=fieldnames, dialect=dialect)
